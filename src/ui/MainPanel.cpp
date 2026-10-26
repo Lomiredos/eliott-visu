@@ -21,6 +21,7 @@
 
 #include "visu/core/GameProcess.hpp"
 #include "visu/runtime/GameSession.hpp" // defaultCamera : picking en pause
+#include "visu/systems/RenderSystem.hpp"   // sceneCamera
 #include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
 
 #include <algorithm>
@@ -755,8 +756,10 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
       if (w > 0.0f && h > 0.0f) {
         float ndcX = 2.0f * (mp.x - imgMin.x) / w - 1.0f;
         float ndcY = 1.0f - 2.0f * (mp.y - imgMin.y) / h;
-        int hit = ScenePreview::pickFrom(play.view, ee::runtime::defaultCamera(),
-                                         ndcX, ndcY, w / h);
+        // Meme camera que le jeu : son entite camera (snapshot), sinon defaut.
+        ee::render::Camera cam = ee::runtime::defaultCamera();
+        ee::systems::sceneCamera(play.view, cam);
+        int hit = ScenePreview::pickFrom(play.view, cam, ndcX, ndcY, w / h);
         if (hit >= 0)
           app.selectedEntity() = hit;
       }

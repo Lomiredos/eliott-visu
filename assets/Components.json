@@ -200,6 +200,31 @@
                     "default": 2.0
                 }
             ]
+        },
+        {
+            "name": "CameraComponent",
+            "fields": [
+                {
+                    "name": "fov",
+                    "type": "float",
+                    "default": 45.0
+                },
+                {
+                    "name": "nearZ",
+                    "type": "float",
+                    "default": 0.1
+                },
+                {
+                    "name": "farZ",
+                    "type": "float",
+                    "default": 200.0
+                },
+                {
+                    "name": "isMain",
+                    "type": "bool",
+                    "default": true
+                }
+            ]
         }
     ]
 }
