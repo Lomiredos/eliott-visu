@@ -181,6 +181,7 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
 
     m_state = State::Starting;
     m_stopRequested = false;
+    m_startTime = std::chrono::steady_clock::now();
     return true;
 }
 

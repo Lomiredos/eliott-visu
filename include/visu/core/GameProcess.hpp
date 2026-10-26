@@ -5,6 +5,7 @@
 #include "visu/ipc/SharedFrame.hpp"
 #include "visu/ipc/Socket.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -49,6 +50,11 @@ public:
     State state() const { return m_state; }
     bool running() const { return m_state == State::Starting || m_state == State::Running; }
     ee::ipc::PlayMode mode() const { return m_mode; }
+    // Secondes depuis le lancement (pour signaler un jeu qui ne se connecte pas).
+    double secondsSinceStart() const
+    {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - m_startTime).count();
+    }
 
     // Derniere image du jeu (mode preview) : texture GL RGBA, lignes de bas en
     // haut (afficher avec uv0=(0,1), uv1=(1,0)). 0 tant qu'aucune image.
@@ -80,6 +86,7 @@ private:
     State m_state = State::Idle;
     ee::ipc::PlayMode m_mode = ee::ipc::PlayMode::Preview;
     bool m_stopRequested = false;
+    std::chrono::steady_clock::time_point m_startTime;
 
     ee::ipc::Socket m_listen;
     ee::ipc::Socket m_conn;

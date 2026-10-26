@@ -19,6 +19,9 @@
 #include <GLFW/glfw3.h> // capture souris + touches pour la navigation camera
 #include <ImGuizmo.h>
 
+#include "visu/core/GameProcess.hpp"
+#include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
+
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
@@ -52,16 +55,20 @@ static const std::vector<std::string> *findEnumOptions(
   return &fieldIt->second;
 }
 
+// _scene = scene affichee : celle de l'editeur, ou le snapshot du jeu pendant
+// le Play (lecture seule : pas de creation/suppression/changement de scene).
 static void drawHierarchy(App &app, Project *project,
                           MainPanel::DeletionState &del,
-                          std::string &sceneStatus) {
-  SceneInfo &scene = app.sceneData();
+                          std::string &sceneStatus, SceneInfo &scene,
+                          bool playing) {
   int &selected = app.selectedEntity();
-  ImGui::TextUnformatted(app.sceneData().name.c_str());
+  ImGui::TextUnformatted(scene.name.c_str());
   ImGui::SameLine();
+  ImGui::BeginDisabled(playing);
   if (ImGui::Button("Change Scene")) {
     ImGui::OpenPopup("Scene_Selector");
   }
+  ImGui::EndDisabled();
 
   if (ImGui::BeginPopup("Scene_Selector")) {
     std::filesystem::path scenesPath = project->scenesDataDir();
@@ -115,6 +122,7 @@ static void drawHierarchy(App &app, Project *project,
   }
 
   ImGui::Separator();
+  ImGui::BeginDisabled(playing);
   if (ImGui::Button("Create Entity")) {
     scene.entities.push_back({});
     selected = static_cast<int>(scene.entities.size()) - 1;
@@ -123,7 +131,11 @@ static void drawHierarchy(App &app, Project *project,
   ImGui::SameLine();
   if (ImGui::Button("Save"))
     app.saveCurrentScene();
-  if (app.sceneDirty()) {
+  ImGui::EndDisabled();
+  if (playing) {
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Play : valeurs du jeu");
+  } else if (app.sceneDirty()) {
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f), "* non sauvegarde");
   }
@@ -146,18 +158,23 @@ static void drawHierarchy(App &app, Project *project,
 
     ImGui::SameLine(ImGui::GetContentRegionMax().x - iconW);
 
+    ImGui::BeginDisabled(playing);
     if (ImGui::SmallButton(icon.c_str())) {
 
       del.entityToDelete = i;
       del.openDeleteEntityModal = true;
     }
+    ImGui::EndDisabled();
   }
 }
 
+// _play non nul pendant le Play : les champs modifies sont envoyes au jeu
+// (pas a la scene), et la structure (composants, nom) est en lecture seule.
 static void drawInspector(App &app, Project *project,
-                          MainPanel::DeletionState &del) {
-  SceneInfo &scene = app.sceneData();
+                          MainPanel::DeletionState &del, SceneInfo &scene,
+                          MainPanel::PlayState *play) {
   int selected = app.selectedEntity();
+  const bool playing = play != nullptr;
 
   if (selected < 0 || selected >= static_cast<int>(scene.entities.size())) {
     ImGui::TextDisabled("Selectionne une entite");
@@ -170,8 +187,10 @@ static void drawInspector(App &app, Project *project,
         ent.name.empty() ? ("Entity " + std::to_string(selected)) : ent.name;
     ImGui::Text("%s", display.c_str());
     ImGui::SameLine();
+    ImGui::BeginDisabled(playing);
     if (ImGui::SmallButton("Rename"))
       ImGui::OpenPopup("rename_entity");
+    ImGui::EndDisabled();
   }
   if (ImGui::BeginPopup("rename_entity")) {
     if (ImGui::IsWindowAppearing())
@@ -206,11 +225,13 @@ static void drawInspector(App &app, Project *project,
 
     ImGui::SameLine(ImGui::GetContentRegionMax().x - iconW);
 
+    ImGui::BeginDisabled(playing);
     if (ImGui::SmallButton(icon)) {
       del.deleteEntity = selected;
       del.deleteComp = c;
       del.openDeleteModal = true;
     }
+    ImGui::EndDisabled();
 
     if (open) {
       if (ci.values.empty())
@@ -245,7 +266,19 @@ static void drawInspector(App &app, Project *project,
             edited = ImGui::InputText(lbl, p);
           }
         }
-        if (edited)
+        if (playing) {
+          // Envoye au jeu ; tant qu'on manipule le champ, il est protege
+          // des snapshots (voir syncPlayView).
+          if (edited)
+            app.game().sendSetField(selected, ci.name, kv.first, kv.second);
+          if (edited || ImGui::IsItemActive()) {
+            play->editEntity = selected;
+            play->editComp = ci.name;
+            play->editField = kv.first;
+            play->editValue = kv.second;
+            play->editTime = ImGui::GetTime();
+          }
+        } else if (edited)
           app.markSceneDirty();
       }
     }
@@ -255,8 +288,10 @@ static void drawInspector(App &app, Project *project,
 
   ImGui::Separator();
 
+  ImGui::BeginDisabled(playing);
   if (ImGui::Button("Add Component"))
     ImGui::OpenPopup("add_comp");
+  ImGui::EndDisabled();
 
   if (ImGui::BeginPopup("add_comp")) {
     std::map<std::string, std::map<std::string, FieldValue>> catalog =
@@ -375,9 +410,19 @@ static void drawDeleteEntityConfirm(App &app, MainPanel::DeletionState &del) {
   }
 }
 
-static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
-                          std::string &buildLog, bool &openBuildErrorPopup) {
+// Champ multiligne en lecture seule (curseur, selection, Ctrl+C), pour les logs.
+static void readOnlyLog(const char *_id, std::string &_text) {
+  ImGui::InputTextMultiline(_id, &_text, ImVec2(720, 320),
+                            ImGuiInputTextFlags_ReadOnly);
+}
 
+static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
+                          std::string &buildLog, bool &openBuildErrorPopup,
+                          MainPanel::PlayState &play) {
+  GameProcess &game = app.game();
+  const bool playing = game.running();
+
+  ImGui::BeginDisabled(playing);
   if (ImGui::Button("Build")) {
     projectbuild::BuildResult r = projectbuild::build(project->root());
     if (r.ok)
@@ -388,24 +433,53 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
       openBuildErrorPopup = true;
     }
   }
+  ImGui::EndDisabled();
   ImGui::SameLine();
 
-  std::filesystem::path exe = project->executablePath();
-  bool exists = std::filesystem::exists(exe);
-  if (!exists)
-    ImGui::BeginDisabled();
-  if (ImGui::Button("Play")) {
-    app.saveCurrentScene();
-    launchProgram(exe);
-  }
-  if (!exists) {
-    ImGui::EndDisabled();
+  if (!playing) {
+    // Play = sauvegarde + build incremental + lancement (process separe).
+    if (ImGui::Button(ICON_FA_PLAY " Play")) {
+      app.saveCurrentScene();
+      projectbuild::BuildResult r = projectbuild::build(project->root());
+      if (!r.ok) {
+        buildStatus = "Echec du build : jeu non lance.";
+        buildLog = r.log;
+        openBuildErrorPopup = true;
+      } else {
+        std::string err;
+        std::filesystem::path log = project->root() / "build" / "play.log";
+        if (game.start(project->executablePath(), log, play.mode, err)) {
+          buildStatus.clear();
+          play.status.clear();
+        } else
+          play.status = err;
+      }
+    }
     ImGui::SameLine();
-    ImGui::TextDisabled("(exe introuvable - build le projet)");
+    int mode = play.mode == ee::ipc::PlayMode::Window ? 1 : 0;
+    ImGui::SetNextItemWidth(150.0f);
+    if (ImGui::Combo("##playmode", &mode, "Dans la preview\0Fenetre separee\0"))
+      play.mode = mode == 1 ? ee::ipc::PlayMode::Window : ee::ipc::PlayMode::Preview;
+  } else {
+    if (ImGui::Button(ICON_FA_STOP " Stop"))
+      game.stop();
+    ImGui::SameLine();
+    if (game.state() == GameProcess::State::Starting &&
+        game.secondsSinceStart() > 5.0)
+      ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f),
+                         "Le jeu ne se connecte pas (moteur du projet a jour ?)");
+    else if (game.state() == GameProcess::State::Starting)
+      ImGui::TextDisabled("Lancement du jeu...");
+    else if (game.mode() == ee::ipc::PlayMode::Window)
+      ImGui::TextDisabled("En cours (fenetre separee)");
+    else
+      ImGui::TextDisabled("En cours (preview)");
   }
 
   if (!buildStatus.empty())
     ImGui::TextDisabled("%s", buildStatus.c_str());
+  if (!play.status.empty())
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", play.status.c_str());
 
   if (openBuildErrorPopup) {
     ImGui::OpenPopup("Erreur de build");
@@ -414,9 +488,22 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
   if (ImGui::BeginPopupModal("Erreur de build", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextUnformatted("Le build a echoue. Sortie :");
-    // Champ lecture seule : curseur, selection et Ctrl+C possibles, sans edition.
-    ImGui::InputTextMultiline("##buildlog", &buildLog, ImVec2(720, 320),
-                              ImGuiInputTextFlags_ReadOnly);
+    readOnlyLog("##buildlog", buildLog);
+    if (ImGui::Button("Fermer"))
+      ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+
+  // Le jeu a plante : l'editeur, lui, est toujours la.
+  if (play.openCrashPopup) {
+    ImGui::OpenPopup("Le jeu s'est arrete");
+    play.openCrashPopup = false;
+  }
+  if (ImGui::BeginPopupModal("Le jeu s'est arrete", nullptr,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextUnformatted(play.crashMessage.c_str());
+    ImGui::TextDisabled("Sortie du jeu (build/play.log) :");
+    readOnlyLog("##playlog", play.crashLog);
     if (ImGui::Button("Fermer"))
       ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
@@ -494,7 +581,8 @@ static bool drawGizmo(App &app, ScenePreview &preview,
 
 static void handlePreviewClicks(App &app, ScenePreview &preview,
                                 MainPanel::NavState &nav, GLFWwindow *win,
-                                unsigned int tex, bool gizmoActive) {
+                                unsigned int tex, bool gizmoActive,
+                                const SceneInfo &shown) {
 
   if (tex != 0 && !gizmoActive && ImGui::IsItemHovered() &&
       ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
@@ -515,7 +603,7 @@ static void handlePreviewClicks(App &app, ScenePreview &preview,
       float vv = (mp.y - rmin.y) / h;
       float ndcX = 2.0f * u - 1.0f;
       float ndcY = 1.0f - 2.0f * vv;
-      int hit = preview.pick(app.sceneData(), ndcX, ndcY, w / h);
+      int hit = preview.pick(shown, ndcX, ndcY, w / h);
       if (hit >= 0)
         app.selectedEntity() = hit;
     }
@@ -583,16 +671,92 @@ static void updateNavOrShowToolbar(ScenePreview &preview,
   }
 }
 
+// Clavier/souris de l'editeur -> etat d'input du jeu. Touches lues par
+// POSITION physique (meme table que le jeu), pas via ImGui qui les traduit
+// selon la langue du clavier.
+static ee::ipc::InputState readCapturedInput(GLFWwindow *_win, ImVec2 _imgMin) {
+  ee::ipc::InputState in;
+  if (!_win)
+    return in;
+  int keyCount = 0;
+  const int *table = ee::runtime::detail::glfwKeyTable(keyCount);
+  for (int i = 0; i < keyCount; ++i)
+    if (glfwGetKey(_win, table[i]) == GLFW_PRESS && table[i] != GLFW_KEY_ESCAPE)
+      in.keysDown.push_back(i);
+
+  static const int s_mouseTable[] = {
+      GLFW_MOUSE_BUTTON_LEFT, GLFW_MOUSE_BUTTON_MIDDLE, GLFW_MOUSE_BUTTON_RIGHT,
+      GLFW_MOUSE_BUTTON_4, GLFW_MOUSE_BUTTON_5};
+  for (int i = 0; i < 5; ++i)
+    in.mouse[i] = glfwGetMouseButton(_win, s_mouseTable[i]) == GLFW_PRESS;
+
+  ImVec2 mp = ImGui::GetMousePos(); // relatif a l'image du jeu
+  in.mouseX = mp.x - _imgMin.x;
+  in.mouseY = mp.y - _imgMin.y;
+  return in;
+}
+
+// Mode preview : l'image vient du jeu, les inputs y partent quand on a
+// clique dedans (Echap rend la main).
+static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
+                            int ph) {
+  GameProcess &game = app.game();
+  game.sendResize(pw, ph);
+
+  unsigned int tex = game.texture();
+  ImVec2 size(static_cast<float>(pw), static_cast<float>(ph));
+  if (tex != 0)
+    ImGui::Image((ImTextureID)(intptr_t)tex, size, ImVec2(0, 1), ImVec2(1, 0));
+  else {
+    ImGui::Dummy(size);
+    ImVec2 c = ImGui::GetItemRectMin();
+    ImGui::GetWindowDrawList()->AddText(ImVec2(c.x + 12, c.y + 12),
+                                        ImGui::GetColorU32(ImGuiCol_TextDisabled),
+                                        "Lancement du jeu...");
+  }
+  ImVec2 imgMin = ImGui::GetItemRectMin();
+  ImVec2 imgMax = ImGui::GetItemRectMax();
+  GLFWwindow *win = glfwGetCurrentContext();
+
+  if (!play.captured && ImGui::IsItemClicked(ImGuiMouseButton_Left))
+    play.captured = true;
+
+  bool escDown = win && glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+  if (play.captured && escDown && !play.escWasDown)
+    play.captured = false;
+  play.escWasDown = escDown;
+
+  // Toujours envoye : un etat vide quand on ne capture pas relache tout.
+  game.sendInput(play.captured ? readCapturedInput(win, imgMin)
+                               : ee::ipc::InputState{});
+
+  if (play.captured) {
+    ImGui::GetWindowDrawList()->AddRect(imgMin, imgMax,
+                                        IM_COL32(80, 200, 255, 255), 0.0f, 0, 2.0f);
+    ImGui::TextDisabled("Inputs envoyes au jeu | Echap pour rendre la main");
+  } else
+    ImGui::TextDisabled("Clique dans l'image pour jouer");
+}
+
 static void drawScenePreview(App &app, ScenePreview &preview,
-                             MainPanel::NavState &nav) {
+                             MainPanel::NavState &nav,
+                             MainPanel::PlayState &play) {
   float hintH = ImGui::GetTextLineHeightWithSpacing();
   ImVec2 avail = ImGui::GetContentRegionAvail();
   int pw = static_cast<int>(avail.x);
   int ph = static_cast<int>(avail.y - hintH);
-  unsigned int tex =
-      (pw > 0 && ph > 0)
-          ? preview.render(app.sceneData(), pw, ph, app.selectedEntity())
-          : 0;
+  if (pw <= 0 || ph <= 0)
+    return;
+
+  if (play.active && app.game().mode() == ee::ipc::PlayMode::Preview) {
+    drawGamePreview(app, play, pw, ph);
+    return;
+  }
+
+  // Edition, ou Play en fenetre separee : vue editeur de la scene affichee
+  // (le snapshot du jeu pendant le Play). Pas de gizmo pendant le Play.
+  SceneInfo &shown = play.active ? play.view : app.sceneData();
+  unsigned int tex = preview.render(shown, pw, ph, app.selectedEntity());
   if (tex != 0)
     ImGui::Image((ImTextureID)(intptr_t)tex,
                  ImVec2(static_cast<float>(pw), static_cast<float>(ph)),
@@ -601,9 +765,62 @@ static void drawScenePreview(App &app, ScenePreview &preview,
   ImVec2 imgMin = ImGui::GetItemRectMin();
   GLFWwindow *win = glfwGetCurrentContext();
 
-  bool gizmoActive = drawGizmo(app, preview, nav, imgMin, pw, ph, tex);
-  handlePreviewClicks(app, preview, nav, win, tex, gizmoActive);
+  bool gizmoActive =
+      !play.active && drawGizmo(app, preview, nav, imgMin, pw, ph, tex);
+  if (play.active)
+    ImGuizmo::BeginFrame();
+  handlePreviewClicks(app, preview, nav, win, tex, gizmoActive, shown);
   updateNavOrShowToolbar(preview, nav, win);
+}
+
+// Suit la session de jeu : snapshot -> vue affichee, fin de session, crash.
+static void syncPlayView(App &app, MainPanel::PlayState &play) {
+  GameProcess &game = app.game();
+
+  if (game.state() == GameProcess::State::Crashed) {
+    play.crashMessage = game.crashMessage();
+    play.crashLog = game.log();
+    play.openCrashPopup = true;
+    game.acknowledgeCrash();
+  }
+
+  if (!game.running()) {
+    if (play.active) { // fin de session : retour a la scene, intacte
+      play.active = false;
+      play.view = SceneInfo{};
+      play.captured = false;
+      play.editTime = -1.0;
+    }
+    return;
+  }
+
+  if (!play.active) { // debut : en attendant le 1er snapshot, la scene telle quelle
+    play.active = true;
+    play.view = app.sceneData();
+    play.viewVersion = game.snapshotVersion();
+  }
+
+  if (game.snapshot() && game.snapshotVersion() != play.viewVersion) {
+    play.view = *game.snapshot();
+    play.viewVersion = game.snapshotVersion();
+
+    // Champ en cours d'edition : on garde la valeur de l'utilisateur.
+    if (play.editTime >= 0.0 && ImGui::GetTime() - play.editTime < 0.3 &&
+        play.editEntity >= 0 &&
+        play.editEntity < static_cast<int>(play.view.entities.size()))
+      for (ComponentInstance &ci : play.view.entities[play.editEntity].components)
+        if (ci.name == play.editComp && ci.values.count(play.editField))
+          ci.values[play.editField] = play.editValue;
+  }
+}
+
+void MainPanel::drawHidden() {
+  // Onglet Main masque pendant le Play : plus aucun input vers le jeu
+  // (sinon une touche enfoncee au moment du changement resterait bloquee).
+  if (m_play.captured) {
+    m_play.captured = false;
+    App::getInstance().game().sendInput(ee::ipc::InputState{});
+  }
 }
 
 void MainPanel::draw(Project *project) {
@@ -614,6 +831,10 @@ void MainPanel::draw(Project *project) {
 
   App &app = App::getInstance();
   app.loadSceneIfNeeded();
+  syncPlayView(app, m_play);
+
+  // Pendant le Play, hierarchie et inspecteur montrent l'etat du jeu.
+  SceneInfo &shown = m_play.active ? m_play.view : app.sceneData();
 
   const float spacing = ImGui::GetStyle().ItemSpacing.x;
   const float totalW = ImGui::GetContentRegionAvail().x;
@@ -622,7 +843,7 @@ void MainPanel::draw(Project *project) {
   const float centerW = totalW - leftW - rightW - 2.0f * spacing;
 
   ImGui::BeginChild("HierarchyRegion", ImVec2(leftW, 0), true);
-  drawHierarchy(app, project, m_del, m_sceneStatus);
+  drawHierarchy(app, project, m_del, m_sceneStatus, shown, m_play.active);
   ImGui::EndChild();
 
   ImGui::SameLine();
@@ -630,15 +851,16 @@ void MainPanel::draw(Project *project) {
   ImGui::BeginChild("CenterRegion", ImVec2(centerW, 0), true);
   ImGui::Text("Projet ouvert : %s", project->name().c_str());
   ImGui::Separator();
-  drawBuildPlay(app, project, m_buildStatus, m_buildLog, m_openBuildErrorPopup);
+  drawBuildPlay(app, project, m_buildStatus, m_buildLog, m_openBuildErrorPopup,
+                m_play);
   ImGui::Separator();
-  drawScenePreview(app, m_preview, m_nav);
+  drawScenePreview(app, m_preview, m_nav, m_play);
   ImGui::EndChild();
 
   ImGui::SameLine();
 
   ImGui::BeginChild("InspectorRegion", ImVec2(rightW, 0), true);
-  drawInspector(app, project, m_del);
+  drawInspector(app, project, m_del, shown, m_play.active ? &m_play : nullptr);
   ImGui::EndChild();
 
   drawDeleteConfirm(app, m_del);
