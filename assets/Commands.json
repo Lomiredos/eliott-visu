@@ -1,5 +1,6 @@
 [
   { "keys": "Ctrl+K", "description": "Ouvre la liste des commandes" },
+  { "keys": "Ctrl+O, P", "description": "Ouvre un projet" },
   { "keys": "Ctrl+Z", "description": "Annule la derniere action" },
   { "keys": "Ctrl+Y / Ctrl+Shift+Z", "description": "Refait l'action annulee" }
 ]

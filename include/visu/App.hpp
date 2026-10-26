@@ -41,6 +41,7 @@ private:
   bool m_quitConfirmed = false;
   bool m_openCommandList = false; // Ctrl+K
   std::string m_commandFilter;
+  double m_ctrlOTime = -1.0; // Ctrl+O en attente de P
   struct Command {
     std::string keys, description;
   };
@@ -113,4 +114,5 @@ private:
   void updateHistory();
   void drawCommandList();
   void loadCommands();
+  void handleShortcuts();
 };

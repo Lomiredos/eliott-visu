@@ -297,7 +297,7 @@ void App::drawMenuBar() {
     if (ImGui::BeginMenu("Fichier")) {
       if (ImGui::MenuItem("Quitter"))
         requestQuit();
-      if (ImGui::MenuItem("Ouvrir un projet"))
+      if (ImGui::MenuItem("Ouvrir un projet", "Ctrl+O, P"))
         requestChangeProject();
       ImGui::EndMenu();
     }
@@ -373,6 +373,30 @@ void App::updateHistory() {
            ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift |
                                     ImGuiKey_Z))
     redo();
+}
+
+// Raccourcis en deux temps : Ctrl+O puis P (Ctrl tenu ou non) dans la
+// seconde = ouvrir un projet.
+void App::handleShortcuts() {
+  if (ImGui::GetIO().WantTextInput) {
+    m_ctrlOTime = -1.0;
+    return;
+  }
+  const double now = ImGui::GetTime();
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) {
+    m_ctrlOTime = now;
+    return;
+  }
+  if (m_ctrlOTime < 0.0)
+    return;
+  if (now - m_ctrlOTime > 1.0) {
+    m_ctrlOTime = -1.0;
+    return;
+  }
+  if (ImGui::IsKeyPressed(ImGuiKey_P, false)) {
+    m_ctrlOTime = -1.0;
+    requestChangeProject();
+  }
 }
 
 // Liste des commandes (Ctrl+K) : assets/Commands.json du depot, relu a chaque
@@ -486,6 +510,7 @@ void App::run() {
     }
 
     updateHistory();
+    handleShortcuts();
     drawCommandList();
     flushPanel();
 
