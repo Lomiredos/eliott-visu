@@ -1,5 +1,6 @@
 #pragma once
 
+#include "visu/core/GameProcess.hpp"
 #include "visu/core/SceneInfo.hpp"
 #include "visu/ui/Panel.hpp"
 #include <filesystem>
@@ -36,6 +37,8 @@ private:
 
   bool m_quitConfirmed = false;
 
+  GameProcess m_game; // le jeu lance par Play (process separe)
+
   App();
   ~App();
 
@@ -56,6 +59,8 @@ public:
   void loadSceneIfNeeded();
   void loadSceneData(const std::string &_sceneName);
   void saveCurrentScene();
+
+  GameProcess &game() { return m_game; }
 
   void markSceneDirty() { m_sceneDirty = true; }
   bool sceneDirty() const { return m_sceneDirty; }

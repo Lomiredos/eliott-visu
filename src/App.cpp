@@ -70,6 +70,12 @@ static void buildDefaultLayout(ImGuiID dockspace_id, const ImVec2 &size) {
 App::App() = default;
 
 App::~App() {
+  // Le jeu ne doit jamais survivre a l'editeur ; sa texture est liberee
+  // tant que le contexte GL existe encore.
+  m_game.stop();
+  if (m_window)
+    m_game.releaseGl();
+
   if (m_window) {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -159,6 +165,7 @@ bool App::init() {
 }
 
 void App::openProject(const std::filesystem::path &path) {
+  m_game.stop(); // le jeu appartient a l'ancien projet
   m_project = std::make_unique<Project>(path);
   ee::core::setMeshBaseDir(m_project->root());
   m_sceneLoaded = false;
@@ -331,6 +338,7 @@ void App::run() {
       m_needDefaultLayout = false;
       buildDefaultLayout(m_dockspaceId, viewport->Size);
     }
+    m_game.update(); // avant les panels : snapshot et image de cette frame
     drawMenuBar();
     drawPanels();
 
