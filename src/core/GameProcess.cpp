@@ -69,19 +69,25 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     m_mode = _mode;
     m_logPath = _logPath;
 
-    uint16_t port = 0;
-    m_listen = ee::ipc::Socket::listen(port);
-    if (!m_listen.valid())
+    // Seul le mode preview est relie a l'editeur (image, inputs, inspecteur).
+    // En fenetre separee, le jeu tourne en autonome : on ne garde que le
+    // process (Stop, detection de crash, log).
+    const bool linked = _mode == ee::ipc::PlayMode::Preview;
+    const std::string envPrefix = std::string(ee::ipc::kEditorHostEnv) + "=";
+    std::string hostVar;
+    if (linked)
     {
-        _error = "Impossible d'ouvrir la socket locale.";
-        return false;
-    }
+        uint16_t port = 0;
+        m_listen = ee::ipc::Socket::listen(port);
+        if (!m_listen.valid())
+        {
+            _error = "Impossible d'ouvrir la socket locale.";
+            return false;
+        }
 
-    ee::ipc::HostInfo host;
-    host.port = port;
-    host.mode = _mode;
-    if (_mode == ee::ipc::PlayMode::Preview)
-    {
+        ee::ipc::HostInfo host;
+        host.port = port;
+        host.mode = _mode;
         host.shmName = uniqueShmName();
         if (!m_frame.create(host.shmName))
         {
@@ -89,13 +95,13 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
             cleanup();
             return false;
         }
+        hostVar = envPrefix + ee::ipc::formatHostInfo(host);
     }
-    const std::string hostVar = std::string(ee::ipc::kEditorHostEnv) + "=" + ee::ipc::formatHostInfo(host);
 
 #ifdef _WIN32
-    // Environnement = celui de l'editeur + EE_EDITOR_HOST.
+    // Environnement = celui de l'editeur (sans EE_EDITOR_HOST herite) + le notre.
     std::wstring hostVarW(hostVar.begin(), hostVar.end());
-    std::wstring prefixW = std::wstring(hostVarW.begin(), hostVarW.begin() + hostVarW.find(L'=') + 1);
+    std::wstring prefixW(envPrefix.begin(), envPrefix.end());
     std::vector<wchar_t> env;
     if (wchar_t *block = GetEnvironmentStringsW())
     {
@@ -104,8 +110,11 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
                 env.insert(env.end(), p, p + wcslen(p) + 1);
         FreeEnvironmentStringsW(block);
     }
-    env.insert(env.end(), hostVarW.begin(), hostVarW.end());
-    env.push_back(L'\0');
+    if (linked)
+    {
+        env.insert(env.end(), hostVarW.begin(), hostVarW.end());
+        env.push_back(L'\0');
+    }
     env.push_back(L'\0');
 
     SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE}; // le jeu herite du log
@@ -143,12 +152,12 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     std::string exe = _exe.string();
     std::string dir = _exe.parent_path().string();
     std::string logPath = _logPath.string();
-    const std::string prefix = std::string(ee::ipc::kEditorHostEnv) + "=";
     std::vector<char *> envp;
     for (char **e = environ; *e; ++e)
-        if (std::strncmp(*e, prefix.c_str(), prefix.size()) != 0)
+        if (std::strncmp(*e, envPrefix.c_str(), envPrefix.size()) != 0)
             envp.push_back(*e);
-    envp.push_back(const_cast<char *>(hostVar.c_str()));
+    if (linked)
+        envp.push_back(const_cast<char *>(hostVar.c_str()));
     envp.push_back(nullptr);
     char *argv[] = {exe.data(), nullptr};
 
@@ -179,7 +188,7 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     m_pid = pid;
 #endif
 
-    m_state = State::Starting;
+    m_state = linked ? State::Starting : State::Running; // fenetre : rien a attendre
     m_stopRequested = false;
     m_startTime = std::chrono::steady_clock::now();
     return true;
@@ -190,7 +199,9 @@ void GameProcess::update()
     if (!running())
         return;
 
-    if (m_state == State::Starting)
+    const bool linked = m_mode == ee::ipc::PlayMode::Preview;
+
+    if (linked && m_state == State::Starting)
     {
         ee::ipc::Socket c = m_listen.accept();
         if (c.valid())
@@ -202,7 +213,7 @@ void GameProcess::update()
         }
     }
 
-    if (m_state == State::Running)
+    if (linked && m_state == State::Running)
     {
         std::vector<nlohmann::json> msgs;
         m_conn.poll(msgs);
@@ -214,7 +225,7 @@ void GameProcess::update()
             }
     }
 
-    if (m_mode == ee::ipc::PlayMode::Preview)
+    if (linked)
         uploadFrame();
 
     bool clean = false;
@@ -239,6 +250,16 @@ void GameProcess::stop()
     if (!running())
         return;
     m_stopRequested = true;
+
+    // Fenetre separee : pas de lien pour demander l'arret, on ferme le jeu.
+    if (m_mode == ee::ipc::PlayMode::Window)
+    {
+        kill();
+        m_state = State::Idle;
+        cleanup();
+        return;
+    }
+
     m_conn.send(ee::ipc::msgStop());
 
     // Laisse ~1 s au jeu pour sortir proprement, sinon on le tue.

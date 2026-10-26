@@ -15,10 +15,11 @@
 // Le jeu lance depuis l'editeur (bouton Play), dans un PROCESS SEPARE : un
 // crash du jeu ne fait jamais tomber l'editeur.
 //
-// Lance l'executable avec EE_EDITOR_HOST (port + mode + memoire partagee),
-// ecrit sa sortie dans un log, puis a chaque frame (update, non bloquant) :
-// recoit les snapshots du World, recupere la derniere image (mode preview)
-// et surveille la fin du process (sortie normale ou crash).
+// Ecrit la sortie du jeu dans un log et surveille la fin du process (sortie
+// normale ou crash). En mode preview seulement, le jeu est relie a l'editeur
+// (EE_EDITOR_HOST : port + memoire partagee) : a chaque frame (update, non
+// bloquant), on recoit les snapshots du World et la derniere image. En
+// fenetre separee, le jeu tourne en autonome, sans lien.
 // ---------------------------------------------------------------------------
 class GameProcess
 {

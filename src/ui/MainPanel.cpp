@@ -748,15 +748,27 @@ static void drawScenePreview(App &app, ScenePreview &preview,
   if (pw <= 0 || ph <= 0)
     return;
 
-  if (play.active && app.game().mode() == ee::ipc::PlayMode::Preview) {
+  if (play.active) {
     drawGamePreview(app, play, pw, ph);
     return;
   }
 
-  // Edition, ou Play en fenetre separee : vue editeur de la scene affichee
-  // (le snapshot du jeu pendant le Play). Pas de gizmo pendant le Play.
-  SceneInfo &shown = play.active ? play.view : app.sceneData();
-  unsigned int tex = preview.render(shown, pw, ph, app.selectedEntity());
+  // Fenetre separee : le jeu n'est pas relie a l'editeur, rien a montrer ici.
+  if (app.game().running() &&
+      app.game().mode() == ee::ipc::PlayMode::Window) {
+    ImGui::Dummy(ImVec2(static_cast<float>(pw), static_cast<float>(ph)));
+    ImVec2 rmin = ImGui::GetItemRectMin();
+    const char *msg = "Playing in another window\nFor debug, play in editor";
+    ImVec2 ts = ImGui::CalcTextSize(msg);
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2(rmin.x + (pw - ts.x) * 0.5f, rmin.y + (ph - ts.y) * 0.5f),
+        ImGui::GetColorU32(ImGuiCol_TextDisabled), msg);
+    return;
+  }
+
+  // Edition : vue editeur de la scene.
+  SceneInfo &scene = app.sceneData();
+  unsigned int tex = preview.render(scene, pw, ph, app.selectedEntity());
   if (tex != 0)
     ImGui::Image((ImTextureID)(intptr_t)tex,
                  ImVec2(static_cast<float>(pw), static_cast<float>(ph)),
@@ -765,11 +777,8 @@ static void drawScenePreview(App &app, ScenePreview &preview,
   ImVec2 imgMin = ImGui::GetItemRectMin();
   GLFWwindow *win = glfwGetCurrentContext();
 
-  bool gizmoActive =
-      !play.active && drawGizmo(app, preview, nav, imgMin, pw, ph, tex);
-  if (play.active)
-    ImGuizmo::BeginFrame();
-  handlePreviewClicks(app, preview, nav, win, tex, gizmoActive, shown);
+  bool gizmoActive = drawGizmo(app, preview, nav, imgMin, pw, ph, tex);
+  handlePreviewClicks(app, preview, nav, win, tex, gizmoActive, scene);
   updateNavOrShowToolbar(preview, nav, win);
 }
 
@@ -784,7 +793,11 @@ static void syncPlayView(App &app, MainPanel::PlayState &play) {
     game.acknowledgeCrash();
   }
 
-  if (!game.running()) {
+  // Seul le Play dans la preview est relie a l'editeur ; en fenetre separee,
+  // hierarchie et inspecteur restent sur la scene.
+  const bool linked =
+      game.running() && game.mode() == ee::ipc::PlayMode::Preview;
+  if (!linked) {
     if (play.active) { // fin de session : retour a la scene, intacte
       play.active = false;
       play.view = SceneInfo{};
