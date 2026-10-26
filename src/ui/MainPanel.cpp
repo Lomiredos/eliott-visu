@@ -420,10 +420,21 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
                           std::string &buildLog, bool &openBuildErrorPopup,
                           MainPanel::PlayState &play) {
   GameProcess &game = app.game();
+  // Ctrl+Shift+B : build + Play ; si le jeu tourne, il est arrete et relance
+  // (stop est synchrone : le Play part dans la meme frame).
+  const bool rebuildPlayKey = app.consumeRebuildPlayRequest();
+  if (rebuildPlayKey && game.running()) {
+    game.stop();
+    // Nouvelle session : la vue repart de la scene, pas du vieux snapshot.
+    play.active = false;
+    play.view = SceneInfo{};
+    play.captured = false;
+    play.editTime = -1.0;
+  }
   const bool playing = game.running();
   // Raccourcis Ctrl+B / Ctrl+P (lus par App), equivalents aux boutons.
   const bool buildKey = app.consumeBuildRequest() && !playing;
-  const bool playKey = app.consumePlayRequest();
+  const bool playKey = app.consumePlayRequest() || rebuildPlayKey;
 
   ImGui::BeginDisabled(playing);
   if (ImGui::Button("Build") || buildKey) {

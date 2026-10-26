@@ -375,7 +375,7 @@ void App::updateHistory() {
     redo();
 }
 
-// Raccourcis globaux : Ctrl+S, Ctrl+B, Ctrl+P, et en deux temps Ctrl+O puis P
+// Raccourcis globaux : Ctrl+S, Ctrl+B, Ctrl+P, Ctrl+Shift+B, et en deux temps Ctrl+O puis P
 // (Ctrl tenu ou non) dans la seconde = ouvrir un projet.
 void App::handleShortcuts() {
   // Ctrl+S marche aussi pendant une saisie ; pas pendant le Play (la scene
@@ -385,7 +385,7 @@ void App::handleShortcuts() {
     saveCurrentScene();
 
   // Requetes de la frame precedente non consommees (Main cache) : perdues.
-  m_buildRequested = m_playRequested = false;
+  m_buildRequested = m_playRequested = m_rebuildPlayRequested = false;
 
   if (ImGui::GetIO().WantTextInput) {
     m_ctrlOTime = -1.0;
@@ -412,6 +412,8 @@ void App::handleShortcuts() {
     m_buildRequested = true;
   if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_P))
     m_playRequested = true;
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_B))
+    m_rebuildPlayRequested = true;
 }
 
 // Liste des commandes (Ctrl+K) : assets/Commands.json du depot, relu a chaque

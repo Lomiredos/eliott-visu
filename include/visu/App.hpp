@@ -45,6 +45,7 @@ private:
   double m_ctrlOTime = -1.0; // Ctrl+O en attente de P
   bool m_buildRequested = false; // Ctrl+B, traite par MainPanel
   bool m_playRequested = false;  // Ctrl+P (Play ou Stop)
+  bool m_rebuildPlayRequested = false; // Ctrl+Shift+B (relance si en jeu)
   struct Command {
     std::string keys, description;
   };
@@ -89,6 +90,9 @@ public:
   // Raccourcis Build / Play : vrais une seule frame, consommes par MainPanel.
   bool consumeBuildRequest() { return std::exchange(m_buildRequested, false); }
   bool consumePlayRequest() { return std::exchange(m_playRequested, false); }
+  bool consumeRebuildPlayRequest() {
+    return std::exchange(m_rebuildPlayRequested, false);
+  }
 
   void requestQuit();
   void requestOpenProject();

@@ -4,6 +4,7 @@
   { "keys": "Ctrl+S", "description": "Sauvegarde la scene" },
   { "keys": "Ctrl+B", "description": "Build le projet" },
   { "keys": "Ctrl+P", "description": "Lance le jeu (Play), ou l'arrete s'il tourne" },
+  { "keys": "Ctrl+Shift+B", "description": "Build puis Play (relance le jeu s'il tourne)" },
   { "keys": "Ctrl+Z", "description": "Annule la derniere action" },
   { "keys": "Ctrl+Y / Ctrl+Shift+Z", "description": "Refait l'action annulee" }
 ]
