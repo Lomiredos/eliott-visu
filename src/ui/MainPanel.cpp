@@ -414,10 +414,9 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
   if (ImGui::BeginPopupModal("Erreur de build", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextUnformatted("Le build a echoue. Sortie :");
-    ImGui::BeginChild("buildlog", ImVec2(720, 320), true,
-                      ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextUnformatted(buildLog.c_str());
-    ImGui::EndChild();
+    // Champ lecture seule : curseur, selection et Ctrl+C possibles, sans edition.
+    ImGui::InputTextMultiline("##buildlog", &buildLog, ImVec2(720, 320),
+                              ImGuiInputTextFlags_ReadOnly);
     if (ImGui::Button("Fermer"))
       ImGui::CloseCurrentPopup();
     ImGui::EndPopup();

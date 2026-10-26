@@ -103,9 +103,9 @@ namespace systemgen
         std::ostringstream hpp;
         hpp << "#pragma once\n\n"
             << "#include \"ecs/System.hpp\"\n\n"
-            << "// Systeme genere par EE-Visu. Classe ee::ecs::System : update()\n"
+            << "// Systeme genere par EE-Visu. Classe ee::ecs::UpdateSystem : update()\n"
             << "// itere m_entities -> uniquement les entites qui matchent la signature.\n"
-            << "class " << name << " : public ee::ecs::System\n"
+            << "class " << name << " : public ee::ecs::UpdateSystem\n"
             << "{\n"
             << "public:\n"
             << "    void update(ee::ecs::World &_world, float _dt) override;\n"
@@ -126,7 +126,7 @@ namespace systemgen
             << "        // Acces typé aux composants de la signature :\n";
         for (const std::string &c : _def.requiredComponentName)
             cpp << "        // " << c << " &" << varNameFor(c)
-                << " = _world.getComponent<" << c << ">(e);\n";
+                << " = *_world.getComponent<" << c << ">(e);\n";
         cpp << "        // Entree du frame : ee::input::InputManager::getInstance().IsKeyDown(ee::input::Key::W)\n"
             << "        // TODO: ta logique (ex. " << (_def.requiredComponentName.empty() ? "..." : varNameFor(_def.requiredComponentName.front()))
             << " ...).\n"
