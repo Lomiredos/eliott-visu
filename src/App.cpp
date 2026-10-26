@@ -13,6 +13,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
+#include <imgui_stdlib.h>
 #include <ImGuizmo.h>
 
 #include "FontAwesomeSolid900.h" // police compressee, embarquee dans l'exe
@@ -25,6 +26,7 @@
 #endif
 #include <GLFW/glfw3.h>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -369,6 +371,74 @@ void App::updateHistory() {
     redo();
 }
 
+// Raccourcis du editeur, affiches par Ctrl+K.
+struct Command {
+  const char *keys;
+  const char *description;
+};
+static const Command kCommands[] = {
+    {"Ctrl+K", "Ouvre la liste des commandes"},
+    {"Ctrl+Z", "Annule la derniere action"},
+    {"Ctrl+Y / Ctrl+Shift+Z", "Refait l'action annulee"},
+};
+
+// Popup ephemere : recherche, liste scrollable, Echap ou clic dehors ferme.
+void App::drawCommandList() {
+  if (!ImGui::GetIO().WantTextInput &&
+      ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_K)) {
+    m_openCommandList = true;
+    m_commandFilter.clear();
+  }
+  if (m_openCommandList) {
+    ImGui::OpenPopup("Commandes");
+    m_openCommandList = false;
+  }
+
+  ImGuiViewport *vp = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f,
+                                 vp->WorkPos.y + vp->WorkSize.y * 0.25f),
+                          ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+  ImGui::SetNextWindowSize(ImVec2(480, 0));
+  if (!ImGui::BeginPopup("Commandes"))
+    return;
+
+  if (ImGui::IsWindowAppearing())
+    ImGui::SetKeyboardFocusHere();
+  ImGui::SetNextItemWidth(-1);
+  ImGui::InputTextWithHint("##filtre", "Rechercher une commande...",
+                           &m_commandFilter);
+
+  auto lower = [](std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return s;
+  };
+  const std::string filter = lower(m_commandFilter);
+
+  ImGui::BeginChild("liste", ImVec2(0, 240));
+  if (ImGui::BeginTable("cmds", 2, ImGuiTableFlags_RowBg)) {
+    ImGui::TableSetupColumn("touches", ImGuiTableColumnFlags_WidthFixed, 160);
+    ImGui::TableSetupColumn("description");
+    for (const Command &c : kCommands) {
+      if (!filter.empty() &&
+          lower(c.keys).find(filter) == std::string::npos &&
+          lower(c.description).find(filter) == std::string::npos)
+        continue;
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+      ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", c.keys);
+      ImGui::TableNextColumn();
+      ImGui::TextUnformatted(c.description);
+    }
+    ImGui::EndTable();
+  }
+  ImGui::EndChild();
+
+  if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+    ImGui::CloseCurrentPopup();
+  ImGui::EndPopup();
+}
+
 void App::run() {
   while (!glfwWindowShouldClose(m_window)) {
     glfwPollEvents();
@@ -400,6 +470,7 @@ void App::run() {
     }
 
     updateHistory();
+    drawCommandList();
     flushPanel();
 
     ImGui::Render();

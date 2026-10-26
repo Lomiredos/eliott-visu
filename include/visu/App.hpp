@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 struct GLFWwindow;
@@ -38,6 +39,8 @@ private:
   SceneHistory m_history; // Ctrl+Z / Ctrl+Y
 
   bool m_quitConfirmed = false;
+  bool m_openCommandList = false; // Ctrl+K
+  std::string m_commandFilter;
 
   GameProcess m_game; // le jeu lance par Play (process separe)
 
@@ -104,4 +107,5 @@ private:
   void drawMenuBar();
   void drawPanels();
   void updateHistory();
+  void drawCommandList();
 };
