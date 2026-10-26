@@ -609,7 +609,9 @@ static bool drawGizmo(App &app, ScenePreview &preview,
 static void handlePreviewClicks(App &app, ScenePreview &preview,
                                 MainPanel::NavState &nav, GLFWwindow *win,
                                 unsigned int tex, bool gizmoActive,
-                                const SceneInfo &shown) {
+                                const SceneInfo &shown, bool overInset) {
+  if (overInset)
+    return; // clic sur l'apercu camera : pas de picking ni de navigation
 
   if (tex != 0 && !gizmoActive && ImGui::IsItemHovered() &&
       ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
@@ -800,6 +802,48 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
     ImGui::TextDisabled("Clique dans l'image pour jouer");
 }
 
+// Camera selectionnee : apercu flottant de ce qu'elle voit, en haut a droite
+// de la preview (meme rapport largeur/hauteur que la preview, donc que le jeu
+// lance dedans). Renvoie true si la souris est dessus.
+static bool drawCameraInset(App &app, ScenePreview &preview,
+                            const SceneInfo &scene, ImVec2 imgMin, int pw,
+                            int ph) {
+  ee::render::Camera cam;
+  int sel = app.selectedEntity();
+  if (!ee::systems::entityCamera(scene, sel, cam))
+    return false;
+
+  const float margin = 8.0f;
+  int iw = std::max(160, static_cast<int>(pw * 0.3f));
+  iw = std::min(iw, pw - 2 * static_cast<int>(margin));
+  int ih = static_cast<int>(iw * static_cast<float>(ph) / pw);
+  if (iw <= 0 || ih <= 0)
+    return false;
+
+  unsigned int tex = preview.renderCameraView(scene, cam, iw, ih);
+  if (tex == 0)
+    return false;
+
+  ImVec2 pmin(imgMin.x + pw - margin - iw, imgMin.y + margin);
+  ImVec2 pmax(pmin.x + iw, pmin.y + ih);
+  ImDrawList *dl = ImGui::GetWindowDrawList();
+  dl->AddRectFilled(ImVec2(pmin.x - 3, pmin.y - 3), ImVec2(pmax.x + 3, pmax.y + 3),
+                    IM_COL32(0, 0, 0, 160), 4.0f);
+  dl->AddImage((ImTextureID)(intptr_t)tex, pmin, pmax, ImVec2(0, 1),
+               ImVec2(1, 0));
+  dl->AddRect(ImVec2(pmin.x - 1, pmin.y - 1), ImVec2(pmax.x + 1, pmax.y + 1),
+              IM_COL32(140, 190, 255, 255), 0.0f, 0, 1.5f);
+
+  const std::string &nm = scene.entities[sel].name;
+  std::string label = nm.empty() ? "Camera" : nm;
+  dl->AddText(ImVec2(pmin.x + 6, pmin.y + 4), IM_COL32(0, 0, 0, 200),
+              label.c_str());
+  dl->AddText(ImVec2(pmin.x + 5, pmin.y + 3), IM_COL32(230, 240, 255, 255),
+              label.c_str());
+
+  return ImGui::IsMouseHoveringRect(pmin, pmax);
+}
+
 static void drawScenePreview(App &app, ScenePreview &preview,
                              MainPanel::NavState &nav,
                              MainPanel::PlayState &play) {
@@ -840,7 +884,9 @@ static void drawScenePreview(App &app, ScenePreview &preview,
   GLFWwindow *win = glfwGetCurrentContext();
 
   bool gizmoActive = drawGizmo(app, preview, nav, imgMin, pw, ph, tex);
-  handlePreviewClicks(app, preview, nav, win, tex, gizmoActive, scene);
+  bool overInset = drawCameraInset(app, preview, scene, imgMin, pw, ph);
+  handlePreviewClicks(app, preview, nav, win, tex, gizmoActive, scene,
+                      overInset);
   updateNavOrShowToolbar(preview, nav, win);
 }
 

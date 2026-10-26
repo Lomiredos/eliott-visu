@@ -39,12 +39,30 @@ unsigned int ScenePreview::render(const SceneInfo &_scene, int _width, int _heig
     cam.yaw = m_yaw;
     cam.pitch = m_pitch;
 
+    m_gl.setTarget(0);
     m_gl.beginScene(cam, _width, _height);
 
     ee::systems::renderScene(m_gl, _scene, _selected);
 
     m_gl.endScene();
+    m_gl.viewMatrix(m_view);
+    m_gl.projMatrix(m_proj);
     return m_gl.texture();
+}
+
+unsigned int ScenePreview::renderCameraView(const SceneInfo &_scene, const ee::render::Camera &_cam,
+                                            int _width, int _height)
+{
+    if (_width <= 0 || _height <= 0)
+        return 0;
+
+    m_gl.setTarget(1);
+    m_gl.beginScene(_cam, _width, _height);
+    ee::systems::renderScene(m_gl, _scene, -1, false);
+    m_gl.endScene();
+    unsigned int tex = m_gl.texture();
+    m_gl.setTarget(0);
+    return tex;
 }
 
 void ScenePreview::addYawPitch(float _dYaw, float _dPitch)
@@ -79,12 +97,14 @@ void ScenePreview::dolly(float _amount)
 
 void ScenePreview::getViewMatrix(float _out[16]) const
 {
-    m_gl.viewMatrix(_out);
+    for (int i = 0; i < 16; ++i)
+        _out[i] = m_view[i];
 }
 
 void ScenePreview::getProjMatrix(float _out[16]) const
 {
-    m_gl.projMatrix(_out);
+    for (int i = 0; i < 16; ++i)
+        _out[i] = m_proj[i];
 }
 
 int ScenePreview::pick(const SceneInfo &_scene, float _ndcX, float _ndcY, float _aspect)
