@@ -22,6 +22,10 @@ public:
     // Renvoie l'index de l'entite (sphere) touchee la plus proche, ou -1.
     int pick(const SceneInfo &scene, float ndcX, float ndcY, float aspect);
 
+    // Meme picking depuis une camera quelconque (ex. celle du jeu en pause).
+    static int pickFrom(const SceneInfo &scene, const ee::render::Camera &cam,
+                        float ndcX, float ndcY, float aspect);
+
     // Matrices du dernier render (pour ImGuizmo). column-major, 16 floats.
     void getViewMatrix(float out[16]) const;
     void getProjMatrix(float out[16]) const;

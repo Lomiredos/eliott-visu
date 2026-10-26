@@ -20,6 +20,7 @@
 #include <ImGuizmo.h>
 
 #include "visu/core/GameProcess.hpp"
+#include "visu/runtime/GameSession.hpp" // defaultCamera : picking en pause
 #include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
 
 #include <algorithm>
@@ -744,12 +745,24 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
   GLFWwindow *win = glfwGetCurrentContext();
   const bool hovered = ImGui::IsItemHovered();
 
-  // Clic dans l'image : le jeu prend les inputs (sauf en pause). Clic
-  // ailleurs (autre panneau, bouton Pause...) : il les rend.
+  // Clic dans l'image : le jeu prend les inputs ; en pause, il selectionne
+  // l'entite sous la souris (rayon depuis la camera du jeu, sur le dernier
+  // snapshot). Clic ailleurs (autre panneau, bouton Pause...) : rend les inputs.
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    if (hovered && !game.paused())
+    if (hovered && game.paused()) {
+      float w = imgMax.x - imgMin.x, h = imgMax.y - imgMin.y;
+      ImVec2 mp = ImGui::GetMousePos();
+      if (w > 0.0f && h > 0.0f) {
+        float ndcX = 2.0f * (mp.x - imgMin.x) / w - 1.0f;
+        float ndcY = 1.0f - 2.0f * (mp.y - imgMin.y) / h;
+        int hit = ScenePreview::pickFrom(play.view, ee::runtime::defaultCamera(),
+                                         ndcX, ndcY, w / h);
+        if (hit >= 0)
+          app.selectedEntity() = hit;
+      }
+    } else if (hovered)
       play.captured = true;
-    else if (!hovered)
+    else
       play.captured = false;
   }
   if (game.paused())
@@ -779,7 +792,7 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
                                         IM_COL32(80, 200, 255, 255), 0.0f, 0, 2.0f);
     ImGui::TextDisabled("Inputs envoyes au jeu | Echap pour rendre la main");
   } else if (game.paused())
-    ImGui::TextDisabled("Jeu en pause : les champs restent modifiables");
+    ImGui::TextDisabled("Jeu en pause : clic pour selectionner une entite");
   else
     ImGui::TextDisabled("Clique dans l'image pour jouer");
 }

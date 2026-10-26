@@ -92,18 +92,28 @@ int ScenePreview::pick(const SceneInfo &_scene, float _ndcX, float _ndcY, float 
     if (!m_camInit)
         return -1; // la camera est initialisee dans render()
 
+    ee::render::Camera cam; // fovDeg par defaut = celui du render ##FOV
+    cam.pos = {m_camPos.x, m_camPos.y, m_camPos.z};
+    cam.yaw = m_yaw;
+    cam.pitch = m_pitch;
+    return pickFrom(_scene, cam, _ndcX, _ndcY, _aspect);
+}
+
+int ScenePreview::pickFrom(const SceneInfo &_scene, const ee::render::Camera &_cam,
+                           float _ndcX, float _ndcY, float _aspect)
+{
     // Repere de la camera : avant, droite, haut.
-    ee::math::Vector3<float> forward = forwardFrom(m_yaw, m_pitch);
+    ee::math::Vector3<float> forward = forwardFrom(_cam.yaw, _cam.pitch);
     ee::math::Vector3<float> wup{0.0f, 1.0f, 0.0f};
     ee::math::Vector3<float> right = forward.Cross(wup).Normalize();
     ee::math::Vector3<float> camUp = right.Cross(forward);
 
-    float t = std::tan(45.0f * 3.14159265f / 180.0f * 0.5f); // 45 = fov, a changer ici aussi si le fov change ##FOV
+    float t = std::tan(_cam.fovDeg * 3.14159265f / 180.0f * 0.5f);
 
     // Rayon a travers le pixel (_ndcX, _ndcY) ; la geometrie est deleguee au
     // systeme de picking (indep. du backend de rendu).
     ee::systems::Ray ray;
-    ray.origin = m_camPos;
+    ray.origin = {_cam.pos.x, _cam.pos.y, _cam.pos.z};
     ray.dir = (forward + right * (_ndcX * _aspect * t) + camUp * (_ndcY * t)).Normalize();
 
     return ee::systems::pickScene(_scene, ray);
