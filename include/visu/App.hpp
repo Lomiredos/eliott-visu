@@ -41,6 +41,10 @@ private:
   bool m_quitConfirmed = false;
   bool m_openCommandList = false; // Ctrl+K
   std::string m_commandFilter;
+  struct Command {
+    std::string keys, description;
+  };
+  std::vector<Command> m_commands; // relu a chaque Ctrl+K
 
   GameProcess m_game; // le jeu lance par Play (process separe)
 
@@ -108,4 +112,5 @@ private:
   void drawPanels();
   void updateHistory();
   void drawCommandList();
+  void loadCommands();
 };

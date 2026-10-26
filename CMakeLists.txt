@@ -163,6 +163,17 @@ configure_file(
     "${CMAKE_BINARY_DIR}/generated/visu/helpers/StandardComponents.hpp"
     @ONLY
 )
+
+# Liste des commandes (Ctrl+K) : relue depuis assets/Commands.json a chaque
+# ouverture (modifiable sans recompiler) ; copie integree si le fichier manque.
+set(EDITOR_COMMANDS_PATH "${CMAKE_SOURCE_DIR}/assets/Commands.json")
+file(READ "${EDITOR_COMMANDS_PATH}" EDITOR_COMMANDS_JSON)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${EDITOR_COMMANDS_PATH}")
+configure_file(
+    cmake/EditorCommands.hpp.in
+    "${CMAKE_BINARY_DIR}/generated/visu/ui/EditorCommands.hpp"
+    @ONLY
+)
 target_include_directories(eliott-visu PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 target_link_libraries(eliott-visu PRIVATE

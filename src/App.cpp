@@ -6,6 +6,7 @@
 #include "visu/ui/ConfirmModal.hpp"
 #include "visu/ui/MainPanel.hpp"
 #include "visu/ui/Modal.hpp"
+#include "visu/ui/EditorCommands.hpp"
 #include "visu/ui/Panel.hpp"
 #include "visu/ui/SystemPanel.hpp"
 
@@ -25,11 +26,14 @@
 #include "tinyfiledialogs.h"
 #endif
 #include <GLFW/glfw3.h>
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -371,16 +375,27 @@ void App::updateHistory() {
     redo();
 }
 
-// Raccourcis du editeur, affiches par Ctrl+K.
-struct Command {
-  const char *keys;
-  const char *description;
-};
-static const Command kCommands[] = {
-    {"Ctrl+K", "Ouvre la liste des commandes"},
-    {"Ctrl+Z", "Annule la derniere action"},
-    {"Ctrl+Y / Ctrl+Shift+Z", "Refait l'action annulee"},
-};
+// Liste des commandes (Ctrl+K) : assets/Commands.json du depot, relu a chaque
+// ouverture ; sinon la copie integree au binaire (editeur installe seul).
+void App::loadCommands() {
+  std::string text = visu::kEditorCommandsJson;
+  if (std::ifstream f{visu::kEditorCommandsPath}) {
+    std::stringstream ss;
+    ss << f.rdbuf();
+    text = ss.str();
+  }
+
+  m_commands.clear();
+  nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
+  if (!j.is_array()) {
+    m_commands.push_back({"(erreur)", "Commands.json invalide"});
+    return;
+  }
+  for (const nlohmann::json &c : j)
+    if (c.is_object())
+      m_commands.push_back(
+          {c.value("keys", ""), c.value("description", "")});
+}
 
 // Popup ephemere : recherche, liste scrollable, Echap ou clic dehors ferme.
 void App::drawCommandList() {
@@ -388,6 +403,7 @@ void App::drawCommandList() {
       ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_K)) {
     m_openCommandList = true;
     m_commandFilter.clear();
+    loadCommands();
   }
   if (m_openCommandList) {
     ImGui::OpenPopup("Commandes");
@@ -419,16 +435,16 @@ void App::drawCommandList() {
   if (ImGui::BeginTable("cmds", 2, ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("touches", ImGuiTableColumnFlags_WidthFixed, 160);
     ImGui::TableSetupColumn("description");
-    for (const Command &c : kCommands) {
+    for (const Command &c : m_commands) {
       if (!filter.empty() &&
           lower(c.keys).find(filter) == std::string::npos &&
           lower(c.description).find(filter) == std::string::npos)
         continue;
       ImGui::TableNextRow();
       ImGui::TableNextColumn();
-      ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", c.keys);
+      ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", c.keys.c_str());
       ImGui::TableNextColumn();
-      ImGui::TextUnformatted(c.description);
+      ImGui::TextUnformatted(c.description.c_str());
     }
     ImGui::EndTable();
   }
