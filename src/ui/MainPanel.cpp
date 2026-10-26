@@ -57,6 +57,117 @@ static const std::vector<std::string> *findEnumOptions(
   return &fieldIt->second;
 }
 
+// Glisser-deposer d'une entite (payload = son index dans la scene, int).
+static constexpr const char *kEntityPayload = "EE_ENTITY";
+
+static std::string entityDisplayName(const SceneInfo &_scene, int _index) {
+  const std::string &nm = _scene.entities[_index].name;
+  return nm.empty() ? ("Entity " + std::to_string(_index)) : nm;
+}
+
+static bool entityHasComponent(const EntityInfo &_ent, const std::string &_comp) {
+  return std::any_of(_ent.components.begin(), _ent.components.end(),
+                     [&](const ComponentInstance &_c) { return _c.name == _comp; });
+}
+
+// Champ "entity" : affiche l'entite visee ; on la change en deposant une
+// entite de la hierarchie dessus (refusee si elle n'a pas _required), X la
+// retire, double-clic selectionne l'entite visee. true si modifie.
+static bool entityRefField(App &_app, const char *_label, int &_value,
+                           const std::string &_required,
+                           const SceneInfo &_scene) {
+  const int count = static_cast<int>(_scene.entities.size());
+  bool changed = false;
+
+  std::string text;
+  if (_value < 0)
+    text = _required.empty() ? "(aucune)" : "(aucune : " + _required + ")";
+  else if (_value >= count)
+    text = "(introuvable)";
+  else
+    text = entityDisplayName(_scene, _value);
+
+  const ImGuiStyle &st = ImGui::GetStyle();
+  const float clearW = ImGui::GetFrameHeight();
+  const float w = ImGui::CalcItemWidth() - clearW - st.ItemInnerSpacing.x;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+  ImGui::PushStyleColor(ImGuiCol_Button, st.Colors[ImGuiCol_FrameBg]);
+  ImGui::Button((text + "##ref").c_str(), ImVec2(w, 0));
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0) && _value >= 0 &&
+      _value < count)
+    _app.selectedEntity() = _value;
+  if (ImGui::IsItemHovered() && !ImGui::GetDragDropPayload())
+    ImGui::SetTooltip("Glisse une entite de la hierarchie ici%s%s",
+                      _required.empty() ? "" : "\nRequis : ",
+                      _required.c_str());
+
+  if (ImGui::BeginDragDropTarget()) {
+    const ImGuiPayload *peek = ImGui::AcceptDragDropPayload(
+        kEntityPayload, ImGuiDragDropFlags_AcceptPeekOnly);
+    if (peek) {
+      int index = *static_cast<const int *>(peek->Data);
+      bool ok = index >= 0 && index < count &&
+                (_required.empty() ||
+                 entityHasComponent(_scene.entities[index], _required));
+      if (ok) {
+        if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(kEntityPayload))
+          if (p->IsDelivery() && _value != index) {
+            _value = index;
+            changed = true;
+          }
+      } else {
+        // Mauvais type d'entite : cadre rouge, depot ignore.
+        ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(),
+                                            ImGui::GetItemRectMax(),
+                                            IM_COL32(230, 70, 70, 255), 0.0f,
+                                            0, 2.0f);
+        ImGui::SetTooltip("Il faut une entite avec %s", _required.c_str());
+      }
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  ImGui::SameLine(0.0f, st.ItemInnerSpacing.x);
+  ImGui::BeginDisabled(_value < 0);
+  if (ImGui::Button("X##clearref", ImVec2(clearW, 0))) {
+    _value = -1;
+    changed = true;
+  }
+  ImGui::EndDisabled();
+  ImGui::SameLine(0.0f, st.ItemInnerSpacing.x);
+  ImGui::TextUnformatted(_label);
+  return changed;
+}
+
+// Apres suppression de l'entite _removed : les references vers elle passent
+// a -1 et celles vers les entites suivantes sont decalees (index - 1).
+static void fixEntityRefsAfterRemove(
+    SceneInfo &_scene, int _removed,
+    const std::map<std::string, std::map<std::string, std::string>> &_refFields) {
+  for (EntityInfo &ent : _scene.entities)
+    for (ComponentInstance &ci : ent.components) {
+      auto comp = _refFields.find(ci.name);
+      if (comp == _refFields.end())
+        continue;
+      for (const auto &field : comp->second) {
+        auto it = ci.values.find(field.first);
+        if (it == ci.values.end())
+          continue;
+        int *v = std::get_if<int>(&it->second);
+        if (!v)
+          continue;
+        if (*v == _removed)
+          *v = -1;
+        else if (*v > _removed)
+          --*v;
+      }
+    }
+}
+
 // _scene = scene affichee : celle de l'editeur, ou le snapshot du jeu pendant
 // le Play (lecture seule : pas de creation/suppression/changement de scene).
 static void drawHierarchy(App &app, Project *project,
@@ -152,6 +263,12 @@ static void drawHierarchy(App &app, Project *project,
     std::string label = display + "##ent" + std::to_string(i);
     if (ImGui::Selectable(label.c_str(), selected == i))
       selected = i;
+    // Glisser l'entite sur un champ "entity" de l'inspecteur.
+    if (ImGui::BeginDragDropSource()) {
+      ImGui::SetDragDropPayload(kEntityPayload, &i, sizeof(int));
+      ImGui::TextUnformatted(display.c_str());
+      ImGui::EndDragDropSource();
+    }
 
     std::string icon = std::string(ICON_FA_TRASH) + "##" + std::to_string(i);
 
@@ -211,6 +328,8 @@ static void drawInspector(App &app, Project *project,
 
   std::map<std::string, std::map<std::string, std::vector<std::string>>>
       enumOptions = getAllComponentEnumOptions(project->componentsCatalog());
+  std::map<std::string, std::map<std::string, std::string>> refFields =
+      getAllComponentEntityFields(project->componentsCatalog());
 
   for (int c = 0; c < static_cast<int>(ent.components.size()); ++c) {
     ComponentInstance &ci = ent.components[c];
@@ -242,7 +361,17 @@ static void drawInspector(App &app, Project *project,
 
         const char *lbl = kv.first.c_str();
         bool edited = false;
-        if (auto p = std::get_if<float>(&kv.second))
+        const std::string *refRequired = nullptr;
+        if (auto c = refFields.find(ci.name); c != refFields.end())
+          if (auto f = c->second.find(kv.first); f != c->second.end())
+            refRequired = &f->second;
+
+        if (refRequired) {
+          if (!std::holds_alternative<int>(kv.second)) // ancienne valeur
+            kv.second = static_cast<int>(asFloat(kv.second, -1.0f));
+          edited = entityRefField(app, lbl, std::get<int>(kv.second),
+                                  *refRequired, scene);
+        } else if (auto p = std::get_if<float>(&kv.second))
           edited = ImGui::DragFloat(lbl, p, 0.05f);
         else if (auto p = std::get_if<int>(&kv.second))
           edited = ImGui::DragInt(lbl, p);
@@ -367,7 +496,8 @@ static void drawDeleteConfirm(App &app, MainPanel::DeletionState &del) {
   }
 }
 
-static void drawDeleteEntityConfirm(App &app, MainPanel::DeletionState &del) {
+static void drawDeleteEntityConfirm(App &app, Project *project,
+                                    MainPanel::DeletionState &del) {
   if (del.openDeleteEntityModal) {
     ImGui::OpenPopup("Supprimer l'entite ?");
     del.openDeleteEntityModal = false;
@@ -392,6 +522,9 @@ static void drawDeleteEntityConfirm(App &app, MainPanel::DeletionState &del) {
     if (ImGui::Button("Supprimer")) {
       if (valid) {
         scene.entities.erase(scene.entities.begin() + del.entityToDelete);
+        fixEntityRefsAfterRemove(
+            scene, del.entityToDelete,
+            getAllComponentEntityFields(project->componentsCatalog()));
 
         int &sel = app.selectedEntity();
         if (sel == del.entityToDelete)
@@ -985,5 +1118,5 @@ void MainPanel::draw(Project *project) {
   ImGui::EndChild();
 
   drawDeleteConfirm(app, m_del);
-  drawDeleteEntityConfirm(app, m_del);
+  drawDeleteEntityConfirm(app, project, m_del);
 }

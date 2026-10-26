@@ -27,3 +27,8 @@ std::map<std::string, std::map<std::string, std::vector<std::string>>> getCompon
 // Union STANDARD + PROJET des options d'enum, meme logique que
 // getAllComponentDefaults.
 std::map<std::string, std::map<std::string, std::vector<std::string>>> getAllComponentEnumOptions(const fs::path &_projectCatalog);
+
+// Champs de type "entity" (reference vers une autre entite) : pour chacun, le
+// composant que l'entite visee doit avoir ("" = n'importe laquelle) :
+// { "PlayerComponent": { "Camera": "CameraComponent" } }. Standard + projet.
+std::map<std::string, std::map<std::string, std::string>> getAllComponentEntityFields(const fs::path &_projectCatalog);

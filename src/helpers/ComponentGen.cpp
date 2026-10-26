@@ -2,6 +2,7 @@
 
 #include "visu/helpers/NameValidation.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -29,6 +30,10 @@ namespace
             return "    bool " + _f.name + " = false;\n";
         if (_f.type == "string")
             return "    std::string " + _f.name + ";\n";
+        if (_f.type == "entity")
+            return _f.required.empty()
+                       ? "    ee::EntityRef " + _f.name + ";\n"
+                       : "    ee::EntityRefOf<" + _f.required + "> " + _f.name + ";\n";
         return "    float " + _f.name + " = 0.0f;\n";
     }
 
@@ -117,14 +122,40 @@ namespace componentgen
         }
 
         bool needsString = false;
+        bool needsEntityRef = false;
+        bool needsEngineComponents = false;
+        std::vector<std::string> gameComponentIncludes; // composants requis du projet
         for (const auto &f : fields)
+        {
             if (f.type == "string")
                 needsString = true;
+            if (f.type != "entity")
+                continue;
+            needsEntityRef = true;
+            if (f.required.empty())
+                continue;
+            // Composant requis : celui du projet s'il existe, sinon du moteur.
+            if (fs::exists(_componentsDir / (f.required + ".hpp")))
+            {
+                std::string inc = "Components/" + f.required + ".hpp";
+                if (std::find(gameComponentIncludes.begin(), gameComponentIncludes.end(), inc) ==
+                    gameComponentIncludes.end())
+                    gameComponentIncludes.push_back(inc);
+            }
+            else
+                needsEngineComponents = true;
+        }
 
         std::ostringstream hpp;
         hpp << "#pragma once\n\n"
             << "#include \"visu/reflect/Reflect.hpp\"\n"
             << "#include \"visu/reflect/FieldVisitor.hpp\"\n";
+        if (needsEntityRef)
+            hpp << "#include \"visu/core/EntityRef.hpp\"\n";
+        if (needsEngineComponents)
+            hpp << "#include \"visu/components/Components.hpp\"\n";
+        for (const std::string &inc : gameComponentIncludes)
+            hpp << "#include \"" << inc << "\"\n";
         if (needsString)
             hpp << "\n#include <string>\n";
         hpp << "\n// Composant genere par EE-Visu. La struct est la verite ;\n"

@@ -38,6 +38,8 @@ parseComponentDefaults(Source &&_source) {
             fields[fname] = fld.value("default", std::string{});
           else if (ftype == "enum")
             fields[fname] = fld.value("default", std::string{});
+          else if (ftype == "entity") // index de l'entite visee, -1 = aucune
+            fields[fname] = fld.value("default", -1);
           else
             fields[fname] = fld.value("default", 0.0f);
         }
@@ -125,5 +127,48 @@ getAllComponentEnumOptions(const fs::path &_projectCatalog) {
   auto project = getComponentEnumOptions(_projectCatalog);
   all.merge(project);
 
+  return all;
+}
+
+// Lit, depuis un flux ou une chaine, les champs de type "entity" d'un
+// catalogue et le composant requis ("requires", vide = aucun).
+template <typename Source>
+static std::map<std::string, std::map<std::string, std::string>>
+parseComponentEntityFields(Source &&_source) {
+  std::map<std::string, std::map<std::string, std::string>> out;
+
+  try {
+    json data = json::parse(std::forward<Source>(_source));
+    for (const auto &comp : data["components"]) {
+      std::string cname = comp.value("name", "");
+      if (cname.empty() || !comp.contains("fields"))
+        continue;
+
+      std::map<std::string, std::string> fields;
+      for (const auto &fld : comp["fields"]) {
+        std::string fname = fld.value("name", "");
+        if (fname.empty() || fld.value("type", "") != "entity")
+          continue;
+        fields[fname] = fld.value("requires", std::string{});
+      }
+      if (!fields.empty())
+        out[cname] = std::move(fields);
+    }
+  } catch (const std::exception &) {
+    // catalogue absent/malforme -> map vide
+  }
+
+  return out;
+}
+
+std::map<std::string, std::map<std::string, std::string>>
+getAllComponentEntityFields(const fs::path &_projectCatalog) {
+  auto all = parseComponentEntityFields(std::string(kStandardComponentsJson));
+
+  std::ifstream f(_projectCatalog);
+  if (f) {
+    auto project = parseComponentEntityFields(f);
+    all.merge(project);
+  }
   return all;
 }

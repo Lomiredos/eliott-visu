@@ -12,8 +12,31 @@
 #include "visu/ui/CreateComponentModal.hpp"
 #include "visu/helpers/ComponentGen.hpp"
 #include "visu/helpers/GenerateCatalog.hpp"
+#include "visu/helpers/ComponentGetter.hpp"
+
+#include <set>
+#include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
+
+// Composants proposes comme "requis" d'un champ entity : catalogue (moteur +
+// projet) + composants du projet pas encore passes dans le catalogue.
+static std::vector<std::string> componentNames(Project *_project)
+{
+    std::set<std::string> names;
+    for (const auto &kv : getAllComponentDefaults(_project->componentsCatalog()))
+        names.insert(kv.first);
+    std::error_code ec;
+    for (fs::directory_iterator it(_project->componentsDir(), ec), end; it != end && !ec; it.increment(ec))
+    {
+        std::string stem = it->path().stem().string();
+        if (it->path().extension() == ".hpp" && stem != "RegisterComponents" &&
+            stem != "RegisterWorldComponents")
+            names.insert(stem);
+    }
+    return {names.begin(), names.end()};
+}
 
 void ComponentPanel::draw(Project *project)
 {
@@ -45,7 +68,8 @@ void ComponentPanel::draw(Project *project)
                                                                  }
                                                                  else
                                                                      m_status = r.error;
-                                                             }));
+                                                             },
+                                                             componentNames(project)));
     }
 
     ImGui::SameLine();

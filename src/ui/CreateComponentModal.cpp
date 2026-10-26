@@ -5,7 +5,9 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
-CreateComponentModal::CreateComponentModal(std::function<void(ComponentInfoCreation)> _cb)
+CreateComponentModal::CreateComponentModal(std::function<void(ComponentInfoCreation)> _cb,
+                                           std::vector<std::string> _componentNames)
+    : m_componentNames(std::move(_componentNames))
 {
     m_onClose = _cb;
     m_fields.push_back({"", "float"}); // un champ vide par defaut
@@ -31,7 +33,9 @@ bool CreateComponentModal::Draw()
         ImGui::Separator();
         ImGui::TextUnformatted("Champs :");
 
-        static const char *kTypes[] = {"float", "int", "bool", "string"};
+        // entity = reference vers une autre entite (glisser-deposer dans l'inspecteur)
+        static const char *kTypes[] = {"float", "int", "bool", "string", "entity"};
+        constexpr int kTypeCount = 5;
 
         int toRemove = -1;
         for (size_t i = 0; i < m_fields.size(); ++i)
@@ -43,15 +47,33 @@ bool CreateComponentModal::Draw()
             ImGui::SameLine();
 
             int typeIdx = 0;
-            for (int t = 0; t < 4; ++t)
+            for (int t = 0; t < kTypeCount; ++t)
                 if (m_fields[i].type == kTypes[t])
                 {
                     typeIdx = t;
                     break;
                 }
             ImGui::SetNextItemWidth(90.0f);
-            if (ImGui::Combo("##ftype", &typeIdx, kTypes, 4))
+            if (ImGui::Combo("##ftype", &typeIdx, kTypes, kTypeCount))
                 m_fields[i].type = kTypes[typeIdx];
+
+            if (m_fields[i].type == "entity")
+            {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(170.0f);
+                const std::string &req = m_fields[i].required;
+                if (ImGui::BeginCombo("##freq", req.empty() ? "(toute entite)" : req.c_str()))
+                {
+                    if (ImGui::Selectable("(toute entite)", req.empty()))
+                        m_fields[i].required.clear();
+                    for (const std::string &n : m_componentNames)
+                        if (ImGui::Selectable(n.c_str(), req == n))
+                            m_fields[i].required = n;
+                    ImGui::EndCombo();
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Composant que l'entite glissee doit avoir");
+            }
 
             ImGui::SameLine();
             if (ImGui::SmallButton("X"))
