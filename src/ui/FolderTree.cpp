@@ -7,7 +7,8 @@ fs::path drawFolderTree(
     const fs::path &_dir,
     std::function<void(const std::filesystem::path &)> _onDoubleClick,
     const std::vector<std::string> &_showExtensions,
-    const std::vector<std::string> &_excludeStems) {
+    const std::vector<std::string> &_excludeStems,
+    std::function<void(const std::filesystem::path &)> _contextMenu) {
   fs::path clicked;
   std::error_code ec;
   for (fs::directory_iterator it(_dir, ec), end; it != end && !ec;
@@ -16,7 +17,8 @@ fs::path drawFolderTree(
     if (entry.is_directory()) {
       if (ImGui::TreeNode(entry.path().filename().string().c_str())) {
         fs::path sub = drawFolderTree(entry.path(), _onDoubleClick,
-                                      _showExtensions, _excludeStems);
+                                      _showExtensions, _excludeStems,
+                                      _contextMenu);
         if (!sub.empty())
           clicked = sub;
         ImGui::TreePop();
@@ -53,6 +55,10 @@ fs::path drawFolderTree(
       }
       if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0))
         _onDoubleClick(entry.path());
+      if (_contextMenu && ImGui::BeginPopupContextItem()) {
+        _contextMenu(entry.path());
+        ImGui::EndPopup();
+      }
     }
   }
   return clicked;

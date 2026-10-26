@@ -74,6 +74,14 @@ public:
     }
     return nullptr;
   }
+  template <typename T> std::vector<T *> getPanels() {
+    std::vector<T *> out;
+    for (auto &p : m_panels)
+      if (p->visible)
+        if (auto *found = dynamic_cast<T *>(p.get()))
+          out.push_back(found);
+    return out;
+  }
   const std::filesystem::path &getProjectRoot() const;
 
 private:

@@ -123,6 +123,7 @@ add_executable(eliott-visu
     src/core/Project.cpp
     src/ui/FolderTree.cpp
     src/ui/SystemPanel.cpp
+    src/ui/CodeDock.cpp
     src/ui/ComponentPanel.cpp
     src/ui/MainPanel.cpp
     src/ui/ShowCodePanel.cpp

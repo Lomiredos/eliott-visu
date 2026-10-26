@@ -23,6 +23,9 @@ public:
 
     virtual const char *name() const = 0;
     virtual void draw(Project *project) = 0;
+    // Appele a la place de draw() quand la fenetre existe mais n'est pas
+    // affichee (onglet inactif) : sert a garder vivants les dockspaces internes.
+    virtual void drawHidden() {}
 
     DockRequest dock;
     bool visible = true;

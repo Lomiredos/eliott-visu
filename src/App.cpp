@@ -309,6 +309,8 @@ void App::drawPanels() {
 
     if (ImGui::Begin(p->name(), &p->visible))
       p->draw(m_project.get());
+    else
+      p->drawHidden();
     ImGui::End();
   }
 }

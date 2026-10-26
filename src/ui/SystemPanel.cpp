@@ -4,10 +4,9 @@
 #include "visu/ui/FolderTree.hpp"
 #include "visu/App.hpp"
 #include "visu/ui/ShowCodePanel.hpp"
+#include "visu/ui/ConfirmModal.hpp"
 
 #include "visu/ui/CreateSystemModal.hpp"
-
-#include "visu/helpers/Directions.hpp"
 
 #include "imgui.h"
 #include "visu/helpers/OpenExternal.hpp"
@@ -16,20 +15,44 @@
 
 namespace fs = std::filesystem;
 
-#include <iostream>
+void SystemPanel::askDelete(const fs::path &_dir, const std::string &_name)
+{
+    App::getInstance().openModal(std::make_unique<ConfirmModal>(
+        "Supprimer le systeme ?",
+        "Supprimer " + _name + " (.json, .hpp, .cpp) ? Cette action est definitive.",
+        std::vector<ModalChoice>{
+            {"Supprimer",
+             [this, _dir, _name]()
+             {
+                 std::string err = systemgen::deleteSystem(_dir, _name);
+                 m_status = err.empty() ? "Systeme " + _name + " supprime." : err;
+
+                 // Ferme les lecteurs qui montraient un fichier de ce systeme.
+                 for (ShowCodePanel *p : App::getInstance().getPanels<ShowCodePanel>())
+                     if (p->path().parent_path() == _dir && p->path().stem() == _name)
+                         p->visible = false;
+             }},
+            {"Annuler", nullptr}}));
+}
 
 void SystemPanel::draw(Project *project)
 {
     if (!project || !project->isValid())
     {
         ImGui::TextDisabled("Aucun projet ouvert");
+        m_code.keepAlive();
         return;
     }
 
     fs::path dir = project->systemsDir();
+    fs::path clicked;
+
+    // Colonne de gauche (redimensionnable) : actions + arbres de systemes.
+    ImGui::BeginChild("##systems", ImVec2(280.0f, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+
     if (fs::exists(dir))
     {
-
         if (ImGui::Button("Create new System"))
         {
             // Liste des composants = union moteur + projet, MEME source que
@@ -39,7 +62,7 @@ void SystemPanel::draw(Project *project)
                 comps.push_back(kv.first);
 
             App &app = App::getInstance();
-            // Genere le trio (.json/.hpp/.cpp) dans <projet>/systems/, rebranche
+            // Genere le trio (.json/.hpp/.cpp) dans <projet>/Systems/, rebranche
             // le registre, puis ouvre le stub .cpp dans VS Code.
             app.openModal(std::make_unique<CreateSystemModal>(std::move(comps),
                                                               [dir, this](SystemInfoCreation _data)
@@ -69,8 +92,14 @@ void SystemPanel::draw(Project *project)
         };
 
         // Systemes du PROJET (on masque le fichier de registration).
+        // Clic droit : suppression.
         ImGui::TextDisabled("Projet");
-        fs::path clicked = drawFolderTree(dir, openCode, {".hpp"}, {"RegisterSystems"});
+        clicked = drawFolderTree(dir, openCode, {".hpp"}, {"RegisterSystems"},
+                                 [this, dir](const fs::path &p)
+                                 {
+                                     if (ImGui::MenuItem("Supprimer"))
+                                         askDelete(dir, p.stem().string());
+                                 });
 
         // Systemes MOTEUR (ee-core, submodule) -- lecture seule.
         fs::path engineDir = project->engineIncludeDir() / "systems";
@@ -79,31 +108,16 @@ void SystemPanel::draw(Project *project)
                                                 {"SystemScheduler", "RenderSystem", "PickingSystem"});
         if (clicked.empty())
             clicked = clickedEngine;
-
-        if (!clicked.empty())
-        {
-            App &app = App::getInstance();
-
-            if (ShowCodePanel *unlocked = app.getPanel<ShowCodePanel>(true))
-                unlocked->changePath(clicked);
-            else
-            {
-
-                std::unique_ptr<Panel> panel = std::make_unique<ShowCodePanel>(clicked);
-
-                if (ShowCodePanel *existing = app.getPanel<ShowCodePanel>(false))
-                    panel->dock.dockTarget = existing->dockNode();
-                else
-                {
-                    panel->dock.splitSource = ImGui::GetWindowDockID();
-                    panel->dock.splitDir = Dir::Right;
-                    panel->dock.splitRatio = 0.5f;
-                }
-
-                app.requestPanel(std::move(panel));
-            }
-        }
     }
     else
         ImGui::Text("Dossier introuvable : %s", dir.string().c_str());
+
+    ImGui::EndChild();
+
+    // Colonne de droite : lecteur de code integre au panel.
+    ImGui::SameLine();
+    m_code.draw();
+
+    if (!clicked.empty())
+        m_code.open(clicked);
 }

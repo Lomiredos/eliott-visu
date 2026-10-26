@@ -2,6 +2,7 @@
 
 #include "visu/ui/FileReader.hpp"
 #include "imgui.h"
+#include "imgui_internal.h" // DockNodeGetRootNode
 #include "IconsFontAwesome6.h"
 
 ShowCodePanel::ShowCodePanel(fs::path _path)
@@ -19,6 +20,8 @@ ShowCodePanel::ShowCodePanel(fs::path _path)
 void ShowCodePanel::draw(Project *project)
 {
     m_dockNode = ImGui::GetWindowDockID();
+    ImGuiDockNode *node = ImGui::GetWindowDockNode();
+    m_rootDock = node ? ImGui::DockNodeGetRootNode(node)->ID : 0;
 
     ImGui::TextUnformatted(m_filePath.filename().string().c_str());
 

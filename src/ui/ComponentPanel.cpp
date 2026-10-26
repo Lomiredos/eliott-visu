@@ -4,10 +4,10 @@
 #include "visu/ui/FolderTree.hpp"
 
 #include "imgui.h"
+#include <imgui_stdlib.h> // ImGui::InputTextMultiline(const char*, std::string*)
 #include "visu/helpers/OpenExternal.hpp"
 
 #include "visu/App.hpp"
-#include "visu/ui/ShowCodePanel.hpp"
 
 #include "visu/ui/CreateComponentModal.hpp"
 #include "visu/helpers/ComponentGen.hpp"
@@ -20,10 +20,15 @@ void ComponentPanel::draw(Project *project)
     if (!project || !project->isValid())
     {
         ImGui::TextDisabled("Aucun projet ouvert");
+        m_code.keepAlive();
         return;
     }
 
     fs::path dir = project->componentsDir();
+
+    // Colonne de gauche (redimensionnable) : actions + arbres de composants.
+    ImGui::BeginChild("##components", ImVec2(280.0f, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
 
     if (ImGui::Button("Create new Component"))
     {
@@ -71,9 +76,9 @@ void ComponentPanel::draw(Project *project)
     if (ImGui::BeginPopupModal("Erreur de compilation", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::TextUnformatted("La generation a echoue. Sortie :");
-        ImGui::BeginChild("log", ImVec2(720, 320), true, ImGuiWindowFlags_HorizontalScrollbar);
-        ImGui::TextUnformatted(m_buildLog.c_str());
-        ImGui::EndChild();
+        // Champ lecture seule : curseur, selection et Ctrl+C possibles, sans edition.
+        ImGui::InputTextMultiline("##log", &m_buildLog, ImVec2(720, 320),
+                                  ImGuiInputTextFlags_ReadOnly);
         if (ImGui::Button("Fermer"))
             ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
@@ -101,26 +106,12 @@ void ComponentPanel::draw(Project *project)
     if (clicked.empty())
         clicked = clickedEngine;
 
+    ImGui::EndChild();
+
+    // Colonne de droite : lecteur de code integre au panel.
+    ImGui::SameLine();
+    m_code.draw();
+
     if (!clicked.empty())
-    {
-        App &app = App::getInstance();
-
-        if (ShowCodePanel *unlocked = app.getPanel<ShowCodePanel>(true))
-            unlocked->changePath(clicked);
-        else
-        {
-            std::unique_ptr<Panel> panel = std::make_unique<ShowCodePanel>(clicked);
-
-            if (ShowCodePanel *existing = app.getPanel<ShowCodePanel>(false))
-                panel->dock.dockTarget = existing->dockNode();
-            else
-            {
-                panel->dock.splitSource = ImGui::GetWindowDockID();
-                panel->dock.splitDir = Dir::Right;
-                panel->dock.splitRatio = 0.5f;
-            }
-
-            app.requestPanel(std::move(panel));
-        }
-    }
+        m_code.open(clicked);
 }

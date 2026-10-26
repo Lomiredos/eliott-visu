@@ -29,4 +29,9 @@ namespace systemgen
     // Renvoie le .cpp genere (a ouvrir) ou un resultat en erreur.
     CreateResult createSystem(const std::filesystem::path &_systemsDir,
                               const SystemInfoCreation &_def);
+
+    // Supprime le trio <Nom>.json/.hpp/.cpp puis regenere RegisterSystems.
+    // Renvoie un message d'erreur (vide si succes).
+    std::string deleteSystem(const std::filesystem::path &_systemsDir,
+                             const std::string &_name);
 }

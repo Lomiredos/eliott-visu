@@ -140,4 +140,27 @@ namespace systemgen
 
         return {cppPath, {}};
     }
+
+    std::string deleteSystem(const fs::path &_systemsDir, const std::string &_name)
+    {
+        if (_name.empty() || _name == "RegisterSystems")
+            return "Nom de systeme invalide.";
+
+        std::string failed;
+        for (const char *ext : {".json", ".hpp", ".cpp"})
+        {
+            fs::path p = _systemsDir / (_name + ext);
+            std::error_code ec;
+            fs::remove(p, ec); // absent -> pas une erreur (ec reste vide)
+            if (ec)
+                failed += " " + p.filename().string();
+        }
+
+        // Meme en cas d'echec partiel : le registre doit refleter les .json restants.
+        regenerateRegister(_systemsDir);
+
+        if (!failed.empty())
+            return "Suppression impossible (fichier verrouille ?) :" + failed;
+        return {};
+    }
 }
