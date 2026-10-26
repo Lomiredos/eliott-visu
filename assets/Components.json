@@ -41,6 +41,12 @@
                     "name": "ScaleZ",
                     "type": "float",
                     "default": 1.0
+                },
+                {
+                    "name": "Parent",
+                    "type": "entity",
+                    "requires": "TransformComponent",
+                    "default": -1
                 }
             ]
         },

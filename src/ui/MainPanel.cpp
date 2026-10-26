@@ -22,6 +22,7 @@
 #include "visu/core/GameProcess.hpp"
 #include "visu/runtime/GameSession.hpp" // defaultCamera : picking en pause
 #include "visu/systems/RenderSystem.hpp"   // sceneCameras
+#include "visu/scene/Hierarchy.hpp"       // parent/enfant
 #include "visu/render/SplitScreen.hpp"
 #include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
 
@@ -169,6 +170,84 @@ static void fixEntityRefsAfterRemove(
     }
 }
 
+// Changement de parent demande par un glisser-deposer dans la hierarchie.
+struct HierarchyDrop {
+  int child = -1;
+  int parent = -1; // -1 = racine
+};
+
+// Une entite de la hierarchie et (si ouverte) ses enfants, recursivement.
+static void drawEntityNode(const SceneInfo &scene,
+                           const std::vector<std::vector<int>> &children,
+                           const std::vector<int> &parents, int i,
+                           int &selected, MainPanel::DeletionState &del,
+                           bool playing, HierarchyDrop &drop) {
+  const std::string display = entityDisplayName(scene, i);
+  const bool leaf = children[i].empty();
+
+  ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+                             ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                             ImGuiTreeNodeFlags_SpanAvailWidth |
+                             ImGuiTreeNodeFlags_DefaultOpen |
+                             ImGuiTreeNodeFlags_AllowOverlap;
+  if (leaf)
+    flags |= ImGuiTreeNodeFlags_Leaf;
+  if (selected == i)
+    flags |= ImGuiTreeNodeFlags_Selected;
+
+  bool open = ImGui::TreeNodeEx((display + "##ent" + std::to_string(i)).c_str(),
+                                flags);
+  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+    selected = i;
+
+  // Glisser l'entite : sur une autre entite (parent) ou sur un champ
+  // "entity" de l'inspecteur.
+  if (ImGui::BeginDragDropSource()) {
+    ImGui::SetDragDropPayload(kEntityPayload, &i, sizeof(int));
+    ImGui::TextUnformatted(display.c_str());
+    ImGui::EndDragDropSource();
+  }
+  if (!playing && ImGui::BeginDragDropTarget()) {
+    const ImGuiPayload *peek = ImGui::AcceptDragDropPayload(
+        kEntityPayload, ImGuiDragDropFlags_AcceptPeekOnly);
+    if (peek) {
+      int child = *static_cast<const int *>(peek->Data);
+      // Refus : soi-meme, un de ses propres enfants (boucle), sans Transform.
+      bool ok = child != i && !ee::scene::isInSubtree(parents, i, child) &&
+                ee::scene::findTransform(scene.entities[child]) &&
+                ee::scene::findTransform(scene.entities[i]);
+      if (ok) {
+        if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(kEntityPayload))
+          if (p->IsDelivery()) {
+            drop.child = child;
+            drop.parent = i;
+          }
+      } else
+        ImGui::SetTooltip(child == i || ee::scene::isInSubtree(parents, i, child)
+                              ? "Impossible : boucle de parents"
+                              : "Il faut un TransformComponent aux deux");
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  std::string icon = std::string(ICON_FA_TRASH) + "##" + std::to_string(i);
+  float iconW = ImGui::CalcTextSize(icon.c_str()).x +
+                ImGui::GetStyle().FramePadding.x * 2.0f;
+  ImGui::SameLine(ImGui::GetContentRegionMax().x - iconW);
+  ImGui::BeginDisabled(playing);
+  if (ImGui::SmallButton(icon.c_str())) {
+    del.entityToDelete = i;
+    del.openDeleteEntityModal = true;
+  }
+  ImGui::EndDisabled();
+
+  if (open) {
+    for (int c : children[i])
+      drawEntityNode(scene, children, parents, c, selected, del, playing, drop);
+    ImGui::TreePop();
+  }
+}
+
 // _scene = scene affichee : celle de l'editeur, ou le snapshot du jeu pendant
 // le Play (lecture seule : pas de creation/suppression/changement de scene).
 static void drawHierarchy(App &app, Project *project,
@@ -256,37 +335,36 @@ static void drawHierarchy(App &app, Project *project,
 
   ImGui::Separator();
 
-  for (int i = 0; i < static_cast<int>(scene.entities.size()); ++i) {
-    ImGui::SetNextItemAllowOverlap();
+  // Arbre parent/enfant (le parent est le champ Parent du Transform).
+  // Glisser une entite sur une autre = en faire son enfant ; sur la zone
+  // vide en bas = la remettre a la racine. Elle garde sa place dans le monde.
+  const std::vector<int> parents = ee::scene::sceneParents(scene);
+  std::vector<std::vector<int>> children(scene.entities.size());
+  for (int i = 0; i < static_cast<int>(parents.size()); ++i)
+    if (parents[i] >= 0)
+      children[parents[i]].push_back(i);
 
-    const std::string &nm = scene.entities[i].name;
-    std::string display = nm.empty() ? ("Entity " + std::to_string(i)) : nm;
-    std::string label = display + "##ent" + std::to_string(i);
-    if (ImGui::Selectable(label.c_str(), selected == i))
-      selected = i;
-    // Glisser l'entite sur un champ "entity" de l'inspecteur.
-    if (ImGui::BeginDragDropSource()) {
-      ImGui::SetDragDropPayload(kEntityPayload, &i, sizeof(int));
-      ImGui::TextUnformatted(display.c_str());
-      ImGui::EndDragDropSource();
+  HierarchyDrop drop;
+  for (int i = 0; i < static_cast<int>(scene.entities.size()); ++i)
+    if (parents[i] < 0)
+      drawEntityNode(scene, children, parents, i, selected, del, playing, drop);
+
+  // Zone vide sous l'arbre : deposer ici = plus de parent.
+  ImVec2 rest = ImGui::GetContentRegionAvail();
+  ImGui::Dummy(ImVec2(rest.x, std::max(rest.y, 24.0f)));
+  if (!playing && ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(kEntityPayload)) {
+      drop.child = *static_cast<const int *>(p->Data);
+      drop.parent = -1;
     }
-
-    std::string icon = std::string(ICON_FA_TRASH) + "##" + std::to_string(i);
-
-    float iconW = ImGui::CalcTextSize(icon.c_str()).x +
-                  ImGui::GetStyle().FramePadding.x * 2.0f;
-
-    ImGui::SameLine(ImGui::GetContentRegionMax().x - iconW);
-
-    ImGui::BeginDisabled(playing);
-    if (ImGui::SmallButton(icon.c_str())) {
-
-      del.entityToDelete = i;
-      del.openDeleteEntityModal = true;
-    }
-    ImGui::EndDisabled();
+    ImGui::EndDragDropTarget();
   }
+
+  // Applique apres le dessin (l'arbre ne change pas pendant qu'on le parcourt).
+  if (drop.child >= 0 && ee::scene::reparent(scene, drop.child, drop.parent))
+    app.markSceneDirty();
 }
+
 
 // _play non nul pendant le Play : les champs modifies sont envoyes au jeu
 // (pas a la scene), et la structure (composants, nom) est en lecture seule.
@@ -359,6 +437,11 @@ static void drawInspector(App &app, Project *project,
       if (ci.values.empty())
         ImGui::TextDisabled("(aucun champ)");
       for (auto &kv : ci.values) {
+
+        // Le parent se change dans la hierarchie (garde la place dans le
+        // monde) ; un depot ici deplacerait l'entite.
+        if (ci.name == "TransformComponent" && kv.first == "Parent")
+          continue;
 
         const char *lbl = kv.first.c_str();
         bool edited = false;
@@ -514,7 +597,9 @@ static void drawDeleteEntityConfirm(App &app, Project *project,
       const std::string &nm = scene.entities[del.entityToDelete].name;
       std::string display =
           nm.empty() ? ("Entity " + std::to_string(del.entityToDelete)) : nm;
-      ImGui::Text("Supprimer \"%s\" et tous ses composants ?", display.c_str());
+      ImGui::Text("Supprimer \"%s\" et tous ses composants ?\n(ses enfants sont "
+                  "gardes, rattaches a son parent)",
+                  display.c_str());
     } else
       ImGui::TextUnformatted("Supprimer cette entite ?");
 
@@ -522,6 +607,15 @@ static void drawDeleteEntityConfirm(App &app, Project *project,
 
     if (ImGui::Button("Supprimer")) {
       if (valid) {
+        // Les enfants restent, a la meme place dans le monde, rattaches au
+        // parent de l'entite supprimee.
+        {
+          std::vector<int> parents = ee::scene::sceneParents(scene);
+          int grandParent = parents[del.entityToDelete];
+          for (int c = 0; c < static_cast<int>(parents.size()); ++c)
+            if (parents[c] == del.entityToDelete)
+              ee::scene::reparent(scene, c, grandParent);
+        }
         scene.entities.erase(scene.entities.begin() + del.entityToDelete);
         fixEntityRefsAfterRemove(
             scene, del.entityToDelete,
@@ -691,24 +785,26 @@ static bool drawGizmo(App &app, ScenePreview &preview,
   if (!tf)
     return false;
 
-  auto gv = [&](const char *k) -> float {
-    auto it = tf->values.find(k);
-    return it != tf->values.end() ? asFloat(it->second) : 0.0f;
-  };
+  // Le gizmo travaille dans le monde ; pour un enfant, le resultat est
+  // reconverti en transform local (relatif au parent).
+  const std::vector<int> parents = ee::scene::sceneParents(sc);
+  const std::vector<ee::scene::Xform> world = ee::scene::sceneWorldXforms(sc);
+  const int parent = parents[sel];
+  const ee::scene::Xform &wx = world[sel];
 
   float vmat[16], pmat[16];
   preview.getViewMatrix(vmat);
   preview.getProjMatrix(pmat);
 
-  float scx = gv("ScaleX"), scy = gv("ScaleY"), scz = gv("ScaleZ");
+  float scx = wx.scale.x, scy = wx.scale.y, scz = wx.scale.z;
   if (scx <= 0.0f)
     scx = 1.0f;
   if (scy <= 0.0f)
     scy = 1.0f;
   if (scz <= 0.0f)
     scz = 1.0f;
-  float translation[3] = {gv("PositionX"), gv("PositionY"), gv("PositionZ")};
-  float rotation[3] = {gv("EuleurX"), gv("EuleurY"), gv("EuleurZ")};
+  float translation[3] = {wx.pos.x, wx.pos.y, wx.pos.z};
+  float rotation[3] = {wx.eulerDeg.x, wx.eulerDeg.y, wx.eulerDeg.z};
   float scale[3] = {scx, scy, scz};
   float model[16];
   ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale, model);
@@ -726,15 +822,11 @@ static bool drawGizmo(App &app, ScenePreview &preview,
 
   if (ImGuizmo::IsUsing()) {
     ImGuizmo::DecomposeMatrixToComponents(model, translation, rotation, scale);
-    tf->values["PositionX"] = translation[0];
-    tf->values["PositionY"] = translation[1];
-    tf->values["PositionZ"] = translation[2];
-    tf->values["EuleurX"] = rotation[0];
-    tf->values["EuleurY"] = rotation[1];
-    tf->values["EuleurZ"] = rotation[2];
-    tf->values["ScaleX"] = scale[0];
-    tf->values["ScaleY"] = scale[1];
-    tf->values["ScaleZ"] = scale[2];
+    ee::scene::Xform moved = ee::scene::makeXform(
+        {translation[0], translation[1], translation[2]},
+        {rotation[0], rotation[1], rotation[2]}, {scale[0], scale[1], scale[2]});
+    ee::scene::writeLocalXform(
+        *tf, parent >= 0 ? ee::scene::relativeTo(world[parent], moved) : moved);
     app.markSceneDirty();
   }
   return ImGuizmo::IsOver() || ImGuizmo::IsUsing();
