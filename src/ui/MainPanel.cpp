@@ -21,7 +21,8 @@
 
 #include "visu/core/GameProcess.hpp"
 #include "visu/runtime/GameSession.hpp" // defaultCamera : picking en pause
-#include "visu/systems/RenderSystem.hpp"   // sceneCamera
+#include "visu/systems/RenderSystem.hpp"   // sceneCameras
+#include "visu/render/SplitScreen.hpp"
 #include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
 
 #include <algorithm>
@@ -886,17 +887,29 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
   // snapshot). Clic ailleurs (autre panneau, bouton Pause...) : rend les inputs.
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     if (hovered && game.paused()) {
-      float w = imgMax.x - imgMin.x, h = imgMax.y - imgMin.y;
+      // Ecran partage : la case sous la souris donne la camera, et le rayon
+      // part de cette camera a travers le point de la case.
+      std::vector<ee::render::Camera> cams;
+      for (const ee::systems::SceneCamera &sc : ee::systems::sceneCameras(play.view))
+        cams.push_back(sc.cam);
+      if (cams.empty())
+        cams.push_back(ee::runtime::defaultCamera());
+      std::vector<ee::render::Viewport> views = ee::render::splitScreen(
+          static_cast<int>(cams.size()), static_cast<int>(imgMax.x - imgMin.x),
+          static_cast<int>(imgMax.y - imgMin.y));
       ImVec2 mp = ImGui::GetMousePos();
-      if (w > 0.0f && h > 0.0f) {
-        float ndcX = 2.0f * (mp.x - imgMin.x) / w - 1.0f;
-        float ndcY = 1.0f - 2.0f * (mp.y - imgMin.y) / h;
-        // Meme camera que le jeu : son entite camera (snapshot), sinon defaut.
-        ee::render::Camera cam = ee::runtime::defaultCamera();
-        ee::systems::sceneCamera(play.view, cam);
-        int hit = ScenePreview::pickFrom(play.view, cam, ndcX, ndcY, w / h);
+      float mx = mp.x - imgMin.x, my = mp.y - imgMin.y;
+      for (size_t i = 0; i < views.size(); ++i) {
+        const ee::render::Viewport &v = views[i];
+        if (mx < v.x || my < v.y || mx >= v.x + v.w || my >= v.y + v.h)
+          continue;
+        float ndcX = 2.0f * (mx - v.x) / v.w - 1.0f;
+        float ndcY = 1.0f - 2.0f * (my - v.y) / v.h;
+        int hit = ScenePreview::pickFrom(play.view, cams[i], ndcX, ndcY,
+                                         static_cast<float>(v.w) / v.h);
         if (hit >= 0)
           app.selectedEntity() = hit;
+        break;
       }
     } else if (hovered)
       play.captured = true;
@@ -946,10 +959,25 @@ static bool drawCameraInset(App &app, ScenePreview &preview,
   if (!ee::systems::entityCamera(scene, sel, cam))
     return false;
 
+  // Forme de l'apercu = celle de la case de cette camera dans l'ecran
+  // partage du jeu (lance dans la preview, donc a la taille de la preview).
+  float aspect = static_cast<float>(pw) / ph;
+  std::vector<ee::systems::SceneCamera> cams = ee::systems::sceneCameras(scene);
+  for (size_t i = 0; i < cams.size(); ++i)
+    if (cams[i].entity == sel) {
+      ee::render::Viewport v = ee::render::splitScreen(
+          static_cast<int>(cams.size()), pw, ph)[i];
+      aspect = static_cast<float>(v.w) / v.h;
+    }
+
   const float margin = 8.0f;
   int iw = std::max(160, static_cast<int>(pw * 0.3f));
   iw = std::min(iw, pw - 2 * static_cast<int>(margin));
-  int ih = static_cast<int>(iw * static_cast<float>(ph) / pw);
+  int ih = static_cast<int>(iw / aspect);
+  if (ih > ph / 2) { // case tres haute : on borne par la hauteur
+    ih = ph / 2;
+    iw = static_cast<int>(ih * aspect);
+  }
   if (iw <= 0 || ih <= 0)
     return false;
 
