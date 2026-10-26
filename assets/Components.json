@@ -58,6 +58,11 @@
                 {
                     "name": "VelocityZ",
                     "type": "float"
+                },
+                {
+                    "name": "isStatic",
+                    "type": "bool",
+                    "default": false
                 }
             ]
         },
@@ -88,11 +93,6 @@
                     "name": "sizeZ",
                     "type": "float",
                     "default": 1.0
-                },
-                {
-                    "name": "isStatic",
-                    "type": "bool",
-                    "default": false
                 }
             ]
         },
