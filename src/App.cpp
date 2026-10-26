@@ -13,6 +13,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
+#include <ImGuizmo.h>
 
 #include "FontAwesomeSolid900.h" // police compressee, embarquee dans l'exe
 #include "IconsFontAwesome6.h"   // defines ICON_FA_* + ICON_MIN/MAX_FA
@@ -171,6 +172,7 @@ void App::openProject(const std::filesystem::path &path) {
   m_sceneLoaded = false;
   m_selectedEntity = -1;
   m_sceneDirty = false;
+  m_history.reset(SceneInfo{});
 }
 
 const std::filesystem::path &App::getProjectRoot() const {
@@ -189,6 +191,7 @@ void App::loadSceneIfNeeded() {
       m_scene = *loaded;
   m_sceneLoaded = true;
   m_sceneDirty = false;
+  m_history.reset(m_scene);
 }
 
 void App::loadSceneData(const std::string &_sceneName) {
@@ -203,12 +206,14 @@ void App::loadSceneData(const std::string &_sceneName) {
       m_scene = *loaded;
   m_sceneLoaded = true;
   m_sceneDirty = false;
+  m_history.reset(m_scene);
 }
 
 void App::saveCurrentScene() {
   if (m_project && m_project->isValid()) {
     saveScene(m_scene, m_project->sceneFile(m_scene.name));
     m_sceneDirty = false;
+    m_history.markSaved();
   }
 }
 
@@ -291,6 +296,14 @@ void App::drawMenuBar() {
       ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Edition")) {
+      if (ImGui::MenuItem("Annuler", "Ctrl+Z", false, canUndo()))
+        undo();
+      if (ImGui::MenuItem("Refaire", "Ctrl+Y", false, canRedo()))
+        redo();
+      ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Fenetre")) {
       for (auto &p : m_panels)
         ImGui::MenuItem(p->name(), nullptr, &p->visible);
@@ -320,6 +333,40 @@ void App::drawPanels() {
       p->drawHidden();
     ImGui::End();
   }
+}
+
+// Pendant le Play, la scene n'est pas modifiee (les edits vont au jeu) :
+// pas d'undo/redo.
+bool App::canUndo() const { return !m_game.running() && m_history.canUndo(); }
+bool App::canRedo() const { return !m_game.running() && m_history.canRedo(); }
+
+void App::undo() {
+  if (canUndo() && m_history.undo(m_scene, m_selectedEntity))
+    m_sceneDirty = !m_history.atSaved();
+}
+
+void App::redo() {
+  if (canRedo() && m_history.redo(m_scene, m_selectedEntity))
+    m_sceneDirty = !m_history.atSaved();
+}
+
+// Fin de frame : enregistre la modif terminee, puis raccourcis clavier.
+void App::updateHistory() {
+  // Un widget encore manipule (drag, gizmo, saisie) = modif pas finie.
+  const bool editing = ImGui::IsAnyItemActive() || ImGuizmo::IsUsing();
+  m_history.commit(m_scene, m_selectedEntity, editing);
+
+  // Champ texte actif : Ctrl+Z lui appartient (undo du texte).
+  if (editing || ImGui::GetIO().WantTextInput)
+    return;
+  // Touches par caractere (ImGui suit la disposition du clavier) : Ctrl+Z
+  // est la touche marquee Z, en AZERTY comme en QWERTY.
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Z))
+    undo();
+  else if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Y) ||
+           ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift |
+                                    ImGuiKey_Z))
+    redo();
 }
 
 void App::run() {
@@ -352,6 +399,7 @@ void App::run() {
         m_currentModal.reset();
     }
 
+    updateHistory();
     flushPanel();
 
     ImGui::Render();

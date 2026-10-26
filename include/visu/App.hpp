@@ -1,6 +1,7 @@
 #pragma once
 
 #include "visu/core/GameProcess.hpp"
+#include "visu/core/SceneHistory.hpp"
 #include "visu/core/SceneInfo.hpp"
 #include "visu/ui/Panel.hpp"
 #include <filesystem>
@@ -34,6 +35,7 @@ private:
   int m_selectedEntity = -1;
   bool m_sceneLoaded = false;
   bool m_sceneDirty = false;
+  SceneHistory m_history; // Ctrl+Z / Ctrl+Y
 
   bool m_quitConfirmed = false;
 
@@ -62,8 +64,16 @@ public:
 
   GameProcess &game() { return m_game; }
 
-  void markSceneDirty() { m_sceneDirty = true; }
+  void markSceneDirty() {
+    m_sceneDirty = true;
+    m_history.touch();
+  }
   bool sceneDirty() const { return m_sceneDirty; }
+
+  bool canUndo() const;
+  bool canRedo() const;
+  void undo();
+  void redo();
 
   void requestQuit();
   void requestOpenProject();
@@ -93,4 +103,5 @@ private:
   void flushPanel();
   void drawMenuBar();
   void drawPanels();
+  void updateHistory();
 };

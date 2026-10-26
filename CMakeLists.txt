@@ -122,6 +122,7 @@ add_executable(eliott-visu
     src/App.cpp
     src/core/Project.cpp
     src/core/GameProcess.cpp
+    src/core/SceneHistory.cpp
     src/ui/FolderTree.cpp
     src/ui/SystemPanel.cpp
     src/ui/CodeDock.cpp
