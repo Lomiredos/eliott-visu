@@ -5,6 +5,8 @@
   { "keys": "Ctrl+B", "description": "Build le projet" },
   { "keys": "Ctrl+P", "description": "Lance le jeu (Play), ou l'arrete s'il tourne" },
   { "keys": "Ctrl+Shift+B", "description": "Build puis Play (relance le jeu s'il tourne)" },
+  { "keys": "Ctrl+C", "description": "Copie l'entite selectionnee et ses enfants (texte dans un champ)" },
+  { "keys": "Ctrl+V", "description": "Colle l'entite copiee, a cote de l'originale (texte dans un champ)" },
   { "keys": "Ctrl+Z", "description": "Annule la derniere action" },
   { "keys": "Ctrl+Y / Ctrl+Shift+Z", "description": "Refait l'action annulee" }
 ]

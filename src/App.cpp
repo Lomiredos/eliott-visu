@@ -2,6 +2,8 @@
 
 #include "visu/core/MeshStore.hpp"
 #include "visu/core/Project.hpp"
+#include "visu/helpers/ComponentGetter.hpp"
+#include "visu/helpers/EntityClipboard.hpp"
 #include "visu/ui/ComponentPanel.hpp"
 #include "visu/ui/ConfirmModal.hpp"
 #include "visu/ui/MainPanel.hpp"
@@ -307,6 +309,11 @@ void App::drawMenuBar() {
         undo();
       if (ImGui::MenuItem("Refaire", "Ctrl+Y", false, canRedo()))
         redo();
+      ImGui::Separator();
+      if (ImGui::MenuItem("Copier l'entite", "Ctrl+C", false, canCopyEntity()))
+        copyEntity();
+      if (ImGui::MenuItem("Coller l'entite", "Ctrl+V", false, canPasteEntity()))
+        pasteEntity();
       ImGui::EndMenu();
     }
 
@@ -354,6 +361,47 @@ void App::undo() {
 void App::redo() {
   if (canRedo() && m_history.redo(m_scene, m_selectedEntity))
     m_sceneDirty = !m_history.atSaved();
+}
+
+// Cle de la scene pour le presse-papiers : coller dans la meme scene garde
+// les references vers les entites non copiees.
+static std::string sceneKey(const std::filesystem::path &_root,
+                            const SceneInfo &_scene) {
+  return _root.string() + "|" + _scene.name;
+}
+
+bool App::canCopyEntity() const {
+  return m_project && !m_game.running() && m_selectedEntity >= 0 &&
+         m_selectedEntity < static_cast<int>(m_scene.entities.size());
+}
+
+bool App::canPasteEntity() const {
+  return m_project && m_project->isValid() && m_sceneLoaded &&
+         !m_game.running();
+}
+
+void App::copyEntity() {
+  if (!canCopyEntity())
+    return;
+  std::string text = entityclipboard::copy(
+      m_scene, m_selectedEntity, sceneKey(m_project->root(), m_scene));
+  if (!text.empty())
+    ImGui::SetClipboardText(text.c_str());
+}
+
+void App::pasteEntity() {
+  if (!canPasteEntity())
+    return;
+  const char *text = ImGui::GetClipboardText();
+  if (!text)
+    return;
+  int root = entityclipboard::paste(
+      m_scene, text, getAllComponentEntityFields(m_project->componentsCatalog()),
+      sceneKey(m_project->root(), m_scene));
+  if (root < 0)
+    return; // pas une copie d'entites
+  m_selectedEntity = root;
+  markSceneDirty();
 }
 
 // Fin de frame : enregistre la modif terminee, puis raccourcis clavier.
@@ -407,6 +455,12 @@ void App::handleShortcuts() {
     }
     return;
   }
+
+  // Champ texte actif : Ctrl+C/V restent au texte (voir le return plus haut).
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C))
+    copyEntity();
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V))
+    pasteEntity();
 
   if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_B))
     m_buildRequested = true;

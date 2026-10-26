@@ -87,6 +87,13 @@ public:
   void undo();
   void redo();
 
+  // Copier / coller l'entite selectionnee (et ses enfants), via le
+  // presse-papiers du systeme. Hors Play.
+  bool canCopyEntity() const;
+  bool canPasteEntity() const;
+  void copyEntity();
+  void pasteEntity();
+
   // Raccourcis Build / Play : vrais une seule frame, consommes par MainPanel.
   bool consumeBuildRequest() { return std::exchange(m_buildRequested, false); }
   bool consumePlayRequest() { return std::exchange(m_playRequested, false); }

@@ -123,6 +123,7 @@ add_executable(eliott-visu
     src/core/Project.cpp
     src/core/GameProcess.cpp
     src/core/SceneHistory.cpp
+    src/helpers/EntityClipboard.cpp
     src/ui/FolderTree.cpp
     src/ui/SystemPanel.cpp
     src/ui/CodeDock.cpp
