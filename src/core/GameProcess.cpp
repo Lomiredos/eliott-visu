@@ -210,6 +210,8 @@ void GameProcess::update()
             m_listen.close(); // une seule connexion par session
             m_state = State::Running;
             m_sentW = m_sentH = 0;
+            m_sentSelect = -2;
+            m_paused = false;
         }
     }
 
@@ -372,6 +374,8 @@ void GameProcess::cleanup()
     m_hasFrame = false;
     m_snapshot.reset();
     m_sentW = m_sentH = 0;
+    m_sentSelect = -2;
+    m_paused = false;
     m_stopRequested = false;
 #ifdef _WIN32
     if (m_process)
@@ -436,6 +440,22 @@ void GameProcess::sendResize(int _w, int _h)
     m_conn.send(ee::ipc::msgResize(_w, _h));
     m_sentW = _w;
     m_sentH = _h;
+}
+
+void GameProcess::setPaused(bool _paused)
+{
+    if (m_state != State::Running || _paused == m_paused)
+        return;
+    m_paused = _paused;
+    m_conn.send(ee::ipc::msgPause(_paused));
+}
+
+void GameProcess::sendSelect(int _entity)
+{
+    if (m_state != State::Running || _entity == m_sentSelect)
+        return;
+    m_sentSelect = _entity;
+    m_conn.send(ee::ipc::msgSelect(_entity));
 }
 
 void GameProcess::sendInput(const ee::ipc::InputState &_in)

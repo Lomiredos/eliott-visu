@@ -66,6 +66,12 @@ public:
     // Incremente a chaque nouveau snapshot.
     uint64_t snapshotVersion() const { return m_snapshotVersion; }
 
+    // Pause (mode preview) : le jeu ne simule plus et ignore les inputs.
+    void setPaused(bool _paused);
+    bool paused() const { return m_paused; }
+    // Entite selectionnee : le jeu dessine son collider (envoye si change).
+    void sendSelect(int _entity);
+
     void sendResize(int _w, int _h);
     void sendInput(const ee::ipc::InputState &_in);
     void sendSetField(int _entity, const std::string &_comp, const std::string &_field,
@@ -98,6 +104,8 @@ private:
     bool m_hasFrame = false; // une image de CETTE session a ete recue
     int m_texW = 0, m_texH = 0;
     int m_sentW = 0, m_sentH = 0;
+    bool m_paused = false;
+    int m_sentSelect = -2; // -2 = jamais envoye
 
     std::optional<SceneInfo> m_snapshot;
     uint64_t m_snapshotVersion = 0;

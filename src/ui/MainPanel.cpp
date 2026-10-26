@@ -464,6 +464,15 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
     if (ImGui::Button(ICON_FA_STOP " Stop"))
       game.stop();
     ImGui::SameLine();
+    if (game.mode() == ee::ipc::PlayMode::Preview &&
+        game.state() == GameProcess::State::Running) {
+      if (ImGui::Button(game.paused() ? ICON_FA_PLAY " Reprendre"
+                                      : ICON_FA_PAUSE " Pause")) {
+        game.setPaused(!game.paused());
+        play.captured = false; // en pause, plus d'inputs vers le jeu
+      }
+      ImGui::SameLine();
+    }
     if (game.state() == GameProcess::State::Starting &&
         game.secondsSinceStart() > 5.0)
       ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f),
@@ -472,6 +481,8 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
       ImGui::TextDisabled("Lancement du jeu...");
     else if (game.mode() == ee::ipc::PlayMode::Window)
       ImGui::TextDisabled("En cours (fenetre separee)");
+    else if (game.paused())
+      ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.2f, 1.0f), "En pause");
     else
       ImGui::TextDisabled("En cours (preview)");
   }
@@ -717,9 +728,18 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
   ImVec2 imgMin = ImGui::GetItemRectMin();
   ImVec2 imgMax = ImGui::GetItemRectMax();
   GLFWwindow *win = glfwGetCurrentContext();
+  const bool hovered = ImGui::IsItemHovered();
 
-  if (!play.captured && ImGui::IsItemClicked(ImGuiMouseButton_Left))
-    play.captured = true;
+  // Clic dans l'image : le jeu prend les inputs (sauf en pause). Clic
+  // ailleurs (autre panneau, bouton Pause...) : il les rend.
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    if (hovered && !game.paused())
+      play.captured = true;
+    else if (!hovered)
+      play.captured = false;
+  }
+  if (game.paused())
+    play.captured = false;
 
   bool escDown = win && glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS;
   if (play.captured && escDown && !play.escWasDown)
@@ -729,12 +749,24 @@ static void drawGamePreview(App &app, MainPanel::PlayState &play, int pw,
   // Toujours envoye : un etat vide quand on ne capture pas relache tout.
   game.sendInput(play.captured ? readCapturedInput(win, imgMin)
                                : ee::ipc::InputState{});
+  // Le jeu dessine le collider de l'entite selectionnee.
+  game.sendSelect(app.selectedEntity());
+
+  if (game.paused()) {
+    const char *msg = "PAUSE";
+    ImVec2 ts = ImGui::CalcTextSize(msg);
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2(imgMin.x + (imgMax.x - imgMin.x - ts.x) * 0.5f, imgMin.y + 12.0f),
+        IM_COL32(255, 200, 60, 255), msg);
+  }
 
   if (play.captured) {
     ImGui::GetWindowDrawList()->AddRect(imgMin, imgMax,
                                         IM_COL32(80, 200, 255, 255), 0.0f, 0, 2.0f);
     ImGui::TextDisabled("Inputs envoyes au jeu | Echap pour rendre la main");
-  } else
+  } else if (game.paused())
+    ImGui::TextDisabled("Jeu en pause : les champs restent modifiables");
+  else
     ImGui::TextDisabled("Clique dans l'image pour jouer");
 }
 
