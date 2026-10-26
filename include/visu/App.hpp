@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct GLFWwindow;
@@ -42,6 +43,8 @@ private:
   bool m_openCommandList = false; // Ctrl+K
   std::string m_commandFilter;
   double m_ctrlOTime = -1.0; // Ctrl+O en attente de P
+  bool m_buildRequested = false; // Ctrl+B, traite par MainPanel
+  bool m_playRequested = false;  // Ctrl+P (Play ou Stop)
   struct Command {
     std::string keys, description;
   };
@@ -82,6 +85,10 @@ public:
   bool canRedo() const;
   void undo();
   void redo();
+
+  // Raccourcis Build / Play : vrais une seule frame, consommes par MainPanel.
+  bool consumeBuildRequest() { return std::exchange(m_buildRequested, false); }
+  bool consumePlayRequest() { return std::exchange(m_playRequested, false); }
 
   void requestQuit();
   void requestOpenProject();

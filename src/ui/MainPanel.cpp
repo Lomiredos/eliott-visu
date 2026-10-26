@@ -421,9 +421,12 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
                           MainPanel::PlayState &play) {
   GameProcess &game = app.game();
   const bool playing = game.running();
+  // Raccourcis Ctrl+B / Ctrl+P (lus par App), equivalents aux boutons.
+  const bool buildKey = app.consumeBuildRequest() && !playing;
+  const bool playKey = app.consumePlayRequest();
 
   ImGui::BeginDisabled(playing);
-  if (ImGui::Button("Build")) {
+  if (ImGui::Button("Build") || buildKey) {
     projectbuild::BuildResult r = projectbuild::build(project->root());
     if (r.ok)
       buildStatus = "Build OK.";
@@ -438,7 +441,7 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
 
   if (!playing) {
     // Play = sauvegarde + build incremental + lancement (process separe).
-    if (ImGui::Button(ICON_FA_PLAY " Play")) {
+    if (ImGui::Button(ICON_FA_PLAY " Play") || playKey) {
       app.saveCurrentScene();
       projectbuild::BuildResult r = projectbuild::build(project->root());
       if (!r.ok) {
@@ -461,7 +464,7 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
     if (ImGui::Combo("##playmode", &mode, "Dans la preview\0Fenetre separee\0"))
       play.mode = mode == 1 ? ee::ipc::PlayMode::Window : ee::ipc::PlayMode::Preview;
   } else {
-    if (ImGui::Button(ICON_FA_STOP " Stop"))
+    if (ImGui::Button(ICON_FA_STOP " Stop") || playKey)
       game.stop();
     ImGui::SameLine();
     if (game.mode() == ee::ipc::PlayMode::Preview &&
