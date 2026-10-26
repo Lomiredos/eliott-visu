@@ -126,6 +126,7 @@ add_executable(eliott-visu
     src/helpers/EntityClipboard.cpp
     src/ui/FolderTree.cpp
     src/ui/SystemPanel.cpp
+    src/ui/MaterialPanel.cpp
     src/ui/CodeDock.cpp
     src/ui/ComponentPanel.cpp
     src/ui/MainPanel.cpp

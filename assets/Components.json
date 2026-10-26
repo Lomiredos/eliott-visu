@@ -231,6 +231,66 @@
                     "default": true
                 }
             ]
+        },
+        {
+            "fields": [
+                {
+                    "default": "",
+                    "name": "path",
+                    "type": "string"
+                }
+            ],
+            "name": "MaterialComponent"
+        },
+        {
+            "fields": [
+                {
+                    "default": "#ffffff",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "default": 2.5,
+                    "name": "intensity",
+                    "type": "float"
+                }
+            ],
+            "name": "DirectionalLightComponent"
+        },
+        {
+            "fields": [
+                {
+                    "default": "#ffffff",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "default": 5.0,
+                    "name": "intensity",
+                    "type": "float"
+                },
+                {
+                    "default": 10.0,
+                    "name": "range",
+                    "type": "float"
+                }
+            ],
+            "name": "PointLightComponent"
+        },
+        {
+            "fields": [
+                {
+                    "default": "#ffffff",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "default": 0.25,
+                    "name": "intensity",
+                    "type": "float"
+                }
+            ],
+            "name": "AmbientLightComponent"
         }
     ]
 }

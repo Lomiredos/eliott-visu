@@ -7,6 +7,7 @@
 #include "visu/ui/ComponentPanel.hpp"
 #include "visu/ui/ConfirmModal.hpp"
 #include "visu/ui/MainPanel.hpp"
+#include "visu/ui/MaterialPanel.hpp"
 #include "visu/ui/Modal.hpp"
 #include "visu/ui/EditorCommands.hpp"
 #include "visu/ui/Panel.hpp"
@@ -72,6 +73,7 @@ static void buildDefaultLayout(ImGuiID dockspace_id, const ImVec2 &size) {
   ImGui::DockBuilderDockWindow("Main", dockspace_id);
   ImGui::DockBuilderDockWindow("System", dockspace_id);
   ImGui::DockBuilderDockWindow("Component", dockspace_id);
+  ImGui::DockBuilderDockWindow("Materials", dockspace_id);
 
   ImGui::DockBuilderFinish(dockspace_id);
 }
@@ -169,6 +171,7 @@ bool App::init() {
   requestPanel(std::make_unique<SystemPanel>());
   requestPanel(std::make_unique<ComponentPanel>());
   requestPanel(std::make_unique<MainPanel>());
+  requestPanel(std::make_unique<MaterialPanel>());
   flushPanel();
   return true;
 }

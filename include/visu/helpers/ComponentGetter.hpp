@@ -32,3 +32,7 @@ std::map<std::string, std::map<std::string, std::vector<std::string>>> getAllCom
 // composant que l'entite visee doit avoir ("" = n'importe laquelle) :
 // { "PlayerComponent": { "Camera": "CameraComponent" } }. Standard + projet.
 std::map<std::string, std::map<std::string, std::string>> getAllComponentEntityFields(const fs::path &_projectCatalog);
+
+// Type declare de chaque champ ("float", "int", "bool", "string", "enum",
+// "entity", "color") : { "PointLightComponent": { "color": "color" } }.
+std::map<std::string, std::map<std::string, std::string>> getAllComponentFieldTypes(const fs::path &_projectCatalog);

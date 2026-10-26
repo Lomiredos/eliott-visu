@@ -40,6 +40,8 @@ parseComponentDefaults(Source &&_source) {
             fields[fname] = fld.value("default", std::string{});
           else if (ftype == "entity") // index de l'entite visee, -1 = aucune
             fields[fname] = fld.value("default", -1);
+          else if (ftype == "color") // "#rrggbb"
+            fields[fname] = fld.value("default", std::string("#ffffff"));
           else
             fields[fname] = fld.value("default", 0.0f);
         }
@@ -168,6 +170,40 @@ getAllComponentEntityFields(const fs::path &_projectCatalog) {
   std::ifstream f(_projectCatalog);
   if (f) {
     auto project = parseComponentEntityFields(f);
+    all.merge(project);
+  }
+  return all;
+}
+
+// Type declare ("float", "color", "entity"...) de chaque champ d'un catalogue.
+template <typename Source>
+static std::map<std::string, std::map<std::string, std::string>>
+parseComponentFieldTypes(Source &&_source) {
+  std::map<std::string, std::map<std::string, std::string>> out;
+  try {
+    json data = json::parse(std::forward<Source>(_source));
+    for (const auto &comp : data["components"]) {
+      std::string cname = comp.value("name", "");
+      if (cname.empty() || !comp.contains("fields"))
+        continue;
+      for (const auto &fld : comp["fields"]) {
+        std::string fname = fld.value("name", "");
+        if (!fname.empty())
+          out[cname][fname] = fld.value("type", std::string("float"));
+      }
+    }
+  } catch (const std::exception &) {
+    // catalogue absent/malforme -> map vide
+  }
+  return out;
+}
+
+std::map<std::string, std::map<std::string, std::string>>
+getAllComponentFieldTypes(const fs::path &_projectCatalog) {
+  auto all = parseComponentFieldTypes(std::string(kStandardComponentsJson));
+  std::ifstream f(_projectCatalog);
+  if (f) {
+    auto project = parseComponentFieldTypes(f);
     all.merge(project);
   }
   return all;

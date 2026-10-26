@@ -35,6 +35,8 @@
 
 #include "IconsFontAwesome6.h"
 #include "visu/helpers/FilesGetter.hpp"
+#include "visu/helpers/AssetList.hpp"
+#include "visu/core/Color3.hpp"
 
 static float asFloat(const FieldValue &v, float def = 0.0f) {
   if (auto p = std::get_if<float>(&v))
@@ -145,6 +147,70 @@ static bool entityRefField(App &_app, const char *_label, int &_value,
   return changed;
 }
 
+// Champ couleur ("#rrggbb" dans la scene) : selecteur de couleur.
+static bool colorField(const char *_label, std::string &_hex) {
+  ee::Color3 c;
+  ee::fromHex(_hex, c);
+  float rgb[3] = {c.r, c.g, c.b};
+  if (!ImGui::ColorEdit3(_label, rgb))
+    return false;
+  _hex = ee::toHex({rgb[0], rgb[1], rgb[2]});
+  return true;
+}
+
+// Champs texte qui sont des chemins d'asset : extensions acceptees.
+static const std::vector<std::string> *assetFieldExtensions(const std::string &_comp,
+                                                            const std::string &_field) {
+  static const std::vector<std::string> mat = {".mat"};
+  static const std::vector<std::string> obj = {".obj"};
+  if (_comp == "MaterialComponent" && _field == "path")
+    return &mat;
+  if (_comp == "MeshComponent" && _field == "path")
+    return &obj;
+  return nullptr;
+}
+
+static bool hasExtension(const std::string &_path, const std::vector<std::string> &_exts) {
+  std::string ext = std::filesystem::path(_path).extension().string();
+  std::transform(ext.begin(), ext.end(), ext.begin(),
+                 [](unsigned char _c) { return static_cast<char>(std::tolower(_c)); });
+  return std::find(_exts.begin(), _exts.end(), ext) != _exts.end();
+}
+
+// Champ chemin d'asset : liste des fichiers du projet (Assets/) avec la bonne
+// extension, ou depot d'un asset glisse (panneau Materiaux). true si modifie.
+static bool assetField(const char *_label, std::string &_path,
+                       const std::vector<std::string> &_exts,
+                       const std::filesystem::path &_root) {
+  bool changed = false;
+  std::string shown = _path.empty() ? "(aucun)" : std::filesystem::path(_path).stem().string();
+  if (ImGui::BeginCombo(_label, shown.c_str())) {
+    if (ImGui::Selectable("(aucun)", _path.empty()) && !_path.empty()) {
+      _path.clear();
+      changed = true;
+    }
+    for (const std::string &a : listAssets(_root, _exts))
+      if (ImGui::Selectable(a.c_str(), a == _path) && a != _path) {
+        _path = a;
+        changed = true;
+      }
+    ImGui::EndCombo();
+  }
+  if (ImGui::IsItemHovered() && !_path.empty())
+    ImGui::SetTooltip("%s", _path.c_str());
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(kAssetPayload)) {
+      std::string dropped(static_cast<const char *>(p->Data));
+      if (hasExtension(dropped, _exts) && dropped != _path) {
+        _path = dropped;
+        changed = true;
+      }
+    }
+    ImGui::EndDragDropTarget();
+  }
+  return changed;
+}
+
 // Apres suppression de l'entite _removed : les references vers elle passent
 // a -1 et celles vers les entites suivantes sont decalees (index - 1).
 static void fixEntityRefsAfterRemove(
@@ -170,10 +236,27 @@ static void fixEntityRefsAfterRemove(
     }
 }
 
+// Pose le materiau _path sur l'entite (ajoute le MaterialComponent si besoin).
+static void assignMaterial(SceneInfo &_scene, int _entity, const std::string &_path) {
+  if (_entity < 0 || _entity >= static_cast<int>(_scene.entities.size()))
+    return;
+  for (ComponentInstance &ci : _scene.entities[_entity].components)
+    if (ci.name == "MaterialComponent") {
+      ci.values["path"] = _path;
+      return;
+    }
+  ComponentInstance ci;
+  ci.name = "MaterialComponent";
+  ci.values["path"] = _path;
+  _scene.entities[_entity].components.push_back(std::move(ci));
+}
+
 // Changement de parent demande par un glisser-deposer dans la hierarchie.
 struct HierarchyDrop {
   int child = -1;
   int parent = -1; // -1 = racine
+  int materialTarget = -1; // materiau (.mat) depose sur une entite
+  std::string material;
 };
 
 // Une entite de la hierarchie et (si ouverte) ses enfants, recursivement.
@@ -226,6 +309,14 @@ static void drawEntityNode(const SceneInfo &scene,
         ImGui::SetTooltip(child == i || ee::scene::isInSubtree(parents, i, child)
                               ? "Impossible : boucle de parents"
                               : "Il faut un TransformComponent aux deux");
+    }
+    // Materiau glisse depuis le panneau Materials.
+    if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(kAssetPayload)) {
+      std::string path(static_cast<const char *>(p->Data));
+      if (hasExtension(path, {".mat"})) {
+        drop.materialTarget = i;
+        drop.material = path;
+      }
     }
     ImGui::EndDragDropTarget();
   }
@@ -363,6 +454,10 @@ static void drawHierarchy(App &app, Project *project,
   // Applique apres le dessin (l'arbre ne change pas pendant qu'on le parcourt).
   if (drop.child >= 0 && ee::scene::reparent(scene, drop.child, drop.parent))
     app.markSceneDirty();
+  if (drop.materialTarget >= 0) {
+    assignMaterial(scene, drop.materialTarget, drop.material);
+    app.markSceneDirty();
+  }
 }
 
 
@@ -409,6 +504,8 @@ static void drawInspector(App &app, Project *project,
       enumOptions = getAllComponentEnumOptions(project->componentsCatalog());
   std::map<std::string, std::map<std::string, std::string>> refFields =
       getAllComponentEntityFields(project->componentsCatalog());
+  std::map<std::string, std::map<std::string, std::string>> fieldTypes =
+      getAllComponentFieldTypes(project->componentsCatalog());
 
   for (int c = 0; c < static_cast<int>(ent.components.size()); ++c) {
     ComponentInstance &ci = ent.components[c];
@@ -450,11 +547,23 @@ static void drawInspector(App &app, Project *project,
           if (auto f = c->second.find(kv.first); f != c->second.end())
             refRequired = &f->second;
 
+        bool isColor = false;
+        if (auto c = fieldTypes.find(ci.name); c != fieldTypes.end())
+          if (auto f = c->second.find(kv.first); f != c->second.end())
+            isColor = f->second == "color";
+        const std::vector<std::string> *assetExts =
+            assetFieldExtensions(ci.name, kv.first);
+
         if (refRequired) {
           if (!std::holds_alternative<int>(kv.second)) // ancienne valeur
             kv.second = static_cast<int>(asFloat(kv.second, -1.0f));
           edited = entityRefField(app, lbl, std::get<int>(kv.second),
                                   *refRequired, scene);
+        } else if (isColor && std::holds_alternative<std::string>(kv.second)) {
+          edited = colorField(lbl, std::get<std::string>(kv.second));
+        } else if (assetExts && std::holds_alternative<std::string>(kv.second)) {
+          edited = assetField(lbl, std::get<std::string>(kv.second), *assetExts,
+                              project->root());
         } else if (auto p = std::get_if<float>(&kv.second))
           edited = ImGui::DragFloat(lbl, p, 0.05f);
         else if (auto p = std::get_if<int>(&kv.second))
@@ -1135,6 +1244,23 @@ static void drawScenePreview(App &app, ScenePreview &preview,
 
   ImVec2 imgMin = ImGui::GetItemRectMin();
   GLFWwindow *win = glfwGetCurrentContext();
+
+  // Materiau glisse sur la preview : pose sur l'entite sous la souris.
+  if (tex != 0 && ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(kAssetPayload)) {
+      std::string path(static_cast<const char *>(p->Data));
+      ImVec2 mp = ImGui::GetMousePos();
+      int hit = preview.pick(scene, 2.0f * (mp.x - imgMin.x) / pw - 1.0f,
+                             1.0f - 2.0f * (mp.y - imgMin.y) / ph,
+                             static_cast<float>(pw) / ph);
+      if (hit >= 0 && hasExtension(path, {".mat"})) {
+        assignMaterial(scene, hit, path);
+        app.selectedEntity() = hit;
+        app.markSceneDirty();
+      }
+    }
+    ImGui::EndDragDropTarget();
+  }
 
   bool gizmoActive = drawGizmo(app, preview, nav, imgMin, pw, ph, tex);
   bool overInset = drawCameraInset(app, preview, scene, imgMin, pw, ph);
