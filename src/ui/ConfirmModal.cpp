@@ -2,18 +2,16 @@
 
 #include <imgui.h>
 
-ConfirmModal::ConfirmModal(std::string _title, std::string _text,
-                           std::vector<ModalChoice> _choices)
-    : m_title(std::move(_title)), m_text(std::move(_text)),
-      m_choices(std::move(_choices))
+ConfirmModal::ConfirmModal(std::string _title, std::string _text, std::vector<ModalChoice> _choices)
+    : m_title(std::move(_title)), m_text(std::move(_text)), m_choices(std::move(_choices))
 {
 }
 
-bool ConfirmModal::Draw()
+bool ConfirmModal::draw()
 {
     bool finished = false;
 
-    if (ImGui::BeginPopupModal(Id(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if (ImGui::BeginPopupModal(id(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         if (!m_text.empty())
         {

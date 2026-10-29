@@ -20,27 +20,27 @@ class MaterialPanel : public Panel
 {
 public:
     const char *name() const override { return "Materials"; }
-    void draw(Project *project) override;
+    void draw(Project *_project) override;
 
 private:
-    void drawList(Project *project);
-    void drawEditor(Project *project);
-    bool drawMapSlot(Project *project, int _slot);
-    void select(Project *project, const std::string &_path);
-    void save(Project *project);
-    void refresh(Project *project, bool _force = false);
-    std::filesystem::file_time_type selectedMtime(Project *project) const;
+    void drawList(Project *_project);
+    void drawEditor(Project *_project);
+    bool drawMapSlot(Project *_project, int _slot);
+    void select(Project *_project, const std::string &_path);
+    void save(Project *_project);
+    void refresh(Project *_project, bool _force = false);
+    std::filesystem::file_time_type selectedMtime(Project *_project) const;
 
     std::string m_selected; // chemin relatif a la racine du projet
     ee::core::MaterialAsset m_edit;
-    bool m_dirty = false;      // modifie, pas encore ecrit
+    bool m_dirty = false;                      // modifie, pas encore ecrit
     std::filesystem::file_time_type m_mtime{}; // du fichier quand on l'a lu/ecrit
-    bool m_exists = false;     // le fichier selectionne existe encore
-    std::vector<std::string> m_mats; // .mat du projet (rafraichi 1 fois/s)
+    bool m_exists = false;                     // le fichier selectionne existe encore
+    std::vector<std::string> m_mats;           // .mat du projet (rafraichi 1 fois/s)
     std::chrono::steady_clock::time_point m_lastRefresh{};
     std::string m_newName;
     std::string m_status;
-    int m_previewShape = 0;    // 0 sphere, 1 cube
-    float m_previewYaw = 0.6f; // rotation de l'apercu (glisser la souris)
+    int m_previewShape = 0;      // 0 sphere, 1 cube
+    float m_previewYaw = 0.6f;   // rotation de l'apercu (glisser la souris)
     ee::render::GLRenderer m_gl; // apercu + miniatures des textures
 };

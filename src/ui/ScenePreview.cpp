@@ -69,7 +69,8 @@ void ScenePreview::addYawPitch(float _dYaw, float _dPitch)
 {
     m_yaw += _dYaw;
     m_pitch += _dPitch;
-    const float lim = 1.55f; // +- 89° on peut pas regarder vers le haut ou le bas extreme pour pas retourner la cam
+    const float lim =
+        1.55f; // +- 89° on peut pas regarder vers le haut ou le bas extreme pour pas retourner la cam
     if (m_pitch > lim)
         m_pitch = lim;
     if (m_pitch < -lim)
@@ -119,8 +120,8 @@ int ScenePreview::pick(const SceneInfo &_scene, float _ndcX, float _ndcY, float 
     return pickFrom(_scene, cam, _ndcX, _ndcY, _aspect);
 }
 
-int ScenePreview::pickFrom(const SceneInfo &_scene, const ee::render::Camera &_cam,
-                           float _ndcX, float _ndcY, float _aspect)
+int ScenePreview::pickFrom(const SceneInfo &_scene, const ee::render::Camera &_cam, float _ndcX,
+                           float _ndcY, float _aspect)
 {
     // Repere de la camera : avant, droite, haut.
     ee::math::Vector3<float> forward = forwardFrom(_cam.yaw, _cam.pitch);

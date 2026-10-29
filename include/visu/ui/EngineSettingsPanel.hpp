@@ -15,10 +15,10 @@ class EngineSettingsPanel : public Panel
 {
 public:
     const char *name() const override { return "Reglages"; }
-    void draw(Project *project) override;
+    void draw(Project *_project) override;
 
 private:
-    void save(Project *project);
+    void save(Project *_project);
 
     ee::core::EngineSettings m_edit;
     bool m_dirty = false; // modifie, pas encore ecrit

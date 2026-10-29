@@ -20,7 +20,7 @@ namespace engineupdate
         UpToDate,        // ou verification impossible (hors ligne...)
         Pulling,
         Pulled,
-        PullFailed       // log() : sortie de git
+        PullFailed // log() : sortie de git
     };
 
     class Checker

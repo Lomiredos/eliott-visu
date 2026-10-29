@@ -1,0 +1,3 @@
+# Base de compilation generee par CMake (cmake --preset default -> build/).
+CompileFlags:
+  CompilationDatabase: build

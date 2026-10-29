@@ -18,13 +18,13 @@ private:
     std::vector<bool> m_valide;
     std::string m_sysName;
 
-    std::function<void(SystemInfoCreation)> m_onClose;
+    std::function<void(const SystemInfoCreation &)> m_onClose;
 
     SystemInfoCreation buildResult();
 
 public:
     CreateSystemModal(std::vector<std::string> _components,
-                      std::function<void(SystemInfoCreation)> _cb);
-    const char *Id() const override { return "CreateSystemModal"; }
-    bool Draw() override;
+                      std::function<void(const SystemInfoCreation &)> _cb);
+    const char *id() const override { return "CreateSystemModal"; }
+    bool draw() override;
 };

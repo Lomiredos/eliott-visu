@@ -180,8 +180,8 @@ namespace projectbuild
         const fs::path stamp = _target.empty() ? stampPath(_projectRoot) : fs::path();
         const fs::file_time_type startTime = fs::file_time_type::clock::now();
         unsigned jobs = std::max(1u, std::thread::hardware_concurrency());
-        std::string cmd = "cmake --build \"" + build.string() + "\" --config Debug -j" +
-                          std::to_string(jobs);
+        std::string cmd =
+            "cmake --build \"" + build.string() + "\" --config Debug -j" + std::to_string(jobs);
         if (!_target.empty())
             cmd += " --target " + _target;
         std::string dry = _target.empty() ? "" : cmd + " -- -n 2>&1";
@@ -195,71 +195,79 @@ namespace projectbuild
             then = "\"" + then + "\"";
 #endif
 
-        std::thread([cmd, dry, then, stamp, startTime, s = m_shared]()
+        std::thread(
+            [cmd, dry, then, stamp, startTime, s = m_shared]()
+            {
+                std::string log;
+                // Cible hors de "all" (gen_components) : make n'affiche
+                // pas de "[ 42%]". On compte les etapes, annoncees par
+                // une passe a blanc (-n, ~20 ms) ; +1 : la derniere
+                // edition des liens n'y figure pas.
+                int total = 0;
+                if (!dry.empty())
+                    runLines(dry, [&](const std::string &_l) { total += isStep(_l) ? 1 : 0; });
+                int done = 0;
+                bool sawPercent = false;
+                int rc = runLines(
+                    cmd,
+                    [&](const std::string &_l)
                     {
-                        std::string log;
-                        // Cible hors de "all" (gen_components) : make n'affiche
-                        // pas de "[ 42%]". On compte les etapes, annoncees par
-                        // une passe a blanc (-n, ~20 ms) ; +1 : la derniere
-                        // edition des liens n'y figure pas.
-                        int total = 0;
-                        if (!dry.empty())
-                            runLines(dry, [&](const std::string &_l)
-                                     { total += isStep(_l) ? 1 : 0; });
-                        int done = 0;
-                        bool sawPercent = false;
-                        int rc = runLines(cmd, [&](const std::string &_l)
-                                          {
-                                              int p = parsePercent(_l);
-                                              if (p >= 0)
-                                              {
-                                                  sawPercent = true;
-                                                  s->percent = std::max(s->percent.load(), p);
-                                              }
-                                              if (isStep(_l) && !sawPercent && total > 0)
-                                                  s->percent = std::min(99, ++done * 100 / (total + 1));
-                                              std::string step = parseStep(_l);
-                                              if (!step.empty())
-                                              {
-                                                  std::lock_guard<std::mutex> lock(s->mutex);
-                                                  s->step = step;
-                                              }
-                                          },
-                                          &log);
-                        if (rc == -1 && log.empty())
-                            log = "Impossible de lancer cmake.";
-                        if (rc == 0 && !then.empty())
+                        int p = parsePercent(_l);
+                        if (p >= 0)
                         {
-                            {
-                                std::lock_guard<std::mutex> lock(s->mutex);
-                                s->step = "Generation";
-                            }
-                            rc = runLines(then, [](const std::string &) {}, &log);
+                            sawPercent = true;
+                            s->percent = std::max(s->percent.load(), p);
                         }
-                        if (rc == 0 && !stamp.empty())
-                        {
-                            std::error_code ec;
-                            std::ofstream(stamp).close();
-                            fs::last_write_time(stamp, startTime, ec);
-                            if (ec)
-                                fs::remove(stamp, ec); // sans date fiable, pas de stamp
-                        }
+                        if (isStep(_l) && !sawPercent && total > 0)
+                            s->percent = std::min(99, ++done * 100 / (total + 1));
+                        std::string step = parseStep(_l);
+                        if (!step.empty())
                         {
                             std::lock_guard<std::mutex> lock(s->mutex);
-                            s->result.ok = (rc == 0);
-                            s->result.log = std::move(log);
+                            s->step = step;
                         }
-                        s->done = true;
-                        s->running = false;
-                        g_anyRunning = false;
-                    })
+                    },
+                    &log);
+                if (rc == -1 && log.empty())
+                    log = "Impossible de lancer cmake.";
+                if (rc == 0 && !then.empty())
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(s->mutex);
+                        s->step = "Generation";
+                    }
+                    rc = runLines(then, [](const std::string &) {}, &log);
+                }
+                if (rc == 0 && !stamp.empty())
+                {
+                    std::error_code ec;
+                    std::ofstream(stamp).close();
+                    fs::last_write_time(stamp, startTime, ec);
+                    if (ec)
+                        fs::remove(stamp, ec); // sans date fiable, pas de stamp
+                }
+                {
+                    std::lock_guard<std::mutex> lock(s->mutex);
+                    s->result.ok = (rc == 0);
+                    s->result.log = std::move(log);
+                }
+                s->done = true;
+                s->running = false;
+                g_anyRunning = false;
+            })
             .detach();
         return true;
     }
 
-    bool AsyncBuild::running() const { return m_shared->running; }
+    bool AsyncBuild::running() const
+    {
+        return m_shared->running;
+    }
 
-    bool AsyncBuild::anyRunning() { return g_anyRunning; }
+    bool AsyncBuild::anyRunning()
+    {
+        return g_anyRunning;
+    }
 
     bool AsyncBuild::finished(BuildResult &_out)
     {
@@ -270,7 +278,10 @@ namespace projectbuild
         return true;
     }
 
-    int AsyncBuild::percent() const { return m_shared->percent; }
+    int AsyncBuild::percent() const
+    {
+        return m_shared->percent;
+    }
 
     std::string AsyncBuild::step() const
     {

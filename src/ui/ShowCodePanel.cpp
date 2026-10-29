@@ -1,23 +1,28 @@
 #include "visu/ui/ShowCodePanel.hpp"
 
-#include "visu/ui/FileReader.hpp"
+#include "visu/App.hpp"
+#include "visu/helpers/FileIO.hpp"
 #include "imgui.h"
 #include "imgui_internal.h" // DockNodeGetRootNode
 #include "IconsFontAwesome6.h"
 
-ShowCodePanel::ShowCodePanel(fs::path _path)
+#include <algorithm>
+
+namespace fs = std::filesystem;
+
+ShowCodePanel::ShowCodePanel(const fs::path &_path)
 {
     m_editor.SetReadOnlyEnabled(true);
     m_editor.SetPalette(TextEditor::PaletteId::Dark);
 
     static int s_counter = 0;
     m_idSuffix = "###showcode_" + std::to_string(s_counter++);
-    removeOnClose = true;
+    m_removeOnClose = true;
 
     changePath(_path);
 }
 
-void ShowCodePanel::draw(Project *project)
+void ShowCodePanel::draw(Project *_project)
 {
     m_dockNode = ImGui::GetWindowDockID();
     ImGuiDockNode *node = ImGui::GetWindowDockNode();
@@ -49,8 +54,7 @@ void ShowCodePanel::draw(Project *project)
 
     if (m_info)
     {
-        ImGui::TextDisabled("Priorite: %d   |   Categorie: %s",
-                            m_info->priority,
+        ImGui::TextDisabled("Priorite: %d   |   Categorie: %s", m_info->priority,
                             m_info->category.empty() ? "-" : m_info->category.c_str());
         ImGui::TextUnformatted("Composants :");
         if (m_info->components.empty())
@@ -83,5 +87,12 @@ void ShowCodePanel::changePath(const fs::path &_path)
     else
         m_editor.SetLanguageDefinition(TextEditor::LanguageDefinitionId::None);
 
-    m_editor.SetText(readFile(_path));
+    m_editor.SetText(fileio::readFile(_path));
+}
+
+void ShowCodePanel::closeShowing(const std::vector<fs::path> &_files)
+{
+    for (ShowCodePanel *p : App::getInstance().getPanels<ShowCodePanel>())
+        if (std::find(_files.begin(), _files.end(), p->path()) != _files.end())
+            p->setVisible(false);
 }

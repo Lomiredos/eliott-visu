@@ -4,21 +4,23 @@
 #include <functional>
 #include <string>
 
-struct SceneInfoCreation {
-  std::string name;
+struct SceneInfoCreation
+{
+    std::string name;
 };
 
 // Une scene = un fichier JSON dans Assets/ScenesDatas/, rien de plus (pas de
 // classe C++, pas de parent/heritage : la logique de jeu vit dans les
 // Systems, pas dans la scene).
-class CreateSceneModal : public Modal {
+class CreateSceneModal : public Modal
+{
 private:
-  std::string m_name;
+    std::string m_name;
 
-  std::function<void(SceneInfoCreation)> m_onClose;
+    std::function<void(const SceneInfoCreation &)> m_onClose;
 
 public:
-  explicit CreateSceneModal(std::function<void(SceneInfoCreation)> _cb);
-  const char *Id() const override { return "CreateSceneModal"; }
-  bool Draw() override;
+    explicit CreateSceneModal(std::function<void(const SceneInfoCreation &)> _cb);
+    const char *id() const override { return "CreateSceneModal"; }
+    bool draw() override;
 };

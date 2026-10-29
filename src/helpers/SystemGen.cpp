@@ -1,12 +1,15 @@
 #include "visu/helpers/SystemGen.hpp"
 
+#include "visu/core/Project.hpp"
+#include "visu/helpers/CodeReferences.hpp"
+
+#include "visu/helpers/FileIO.hpp"
 #include "visu/helpers/NameValidation.hpp"
 #include "visu/core/SystemInfo.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <cctype>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -29,15 +32,6 @@ namespace
         return s.empty() ? "c" : s;
     }
 
-    bool writeFile(const fs::path &_path, const std::string &_content)
-    {
-        std::ofstream f(_path, std::ios::binary);
-        if (!f)
-            return false; // fichier verrouille / lecture seule / chemin invalide
-        f << _content;
-        return f.good();
-    }
-
     void regenerateRegister(const fs::path &_systemsDir)
     {
         std::vector<std::string> names;
@@ -52,11 +46,11 @@ namespace
                     names.push_back(info->name);
         }
 
-        writeFile(_systemsDir / "RegisterSystems.hpp",
-                  "#pragma once\n\n"
-                  "#include \"visu/scene/SystemHost.hpp\"\n\n"
-                  "// Genere par EE-Visu. Associe chaque nom de systeme a son type C++.\n"
-                  "void registerGameSystems(ee::scene::SystemHost &_host);\n");
+        fileio::writeFile(_systemsDir / "RegisterSystems.hpp",
+                          "#pragma once\n\n"
+                          "#include \"visu/scene/SystemHost.hpp\"\n\n"
+                          "// Genere par EE-Visu. Associe chaque nom de systeme a son type C++.\n"
+                          "void registerGameSystems(ee::scene::SystemHost &_host);\n");
 
         std::ostringstream cpp;
         cpp << "#include \"Systems/RegisterSystems.hpp\"\n\n";
@@ -67,7 +61,7 @@ namespace
         for (const std::string &n : names)
             cpp << "    _host.reg(\"" << n << "\", ee::scene::makeSystemFactory<" << n << ">());\n";
         cpp << "}\n";
-        writeFile(_systemsDir / "RegisterSystems.cpp", cpp.str());
+        fileio::writeFile(_systemsDir / "RegisterSystems.cpp", cpp.str());
     }
 }
 
@@ -97,7 +91,7 @@ namespace systemgen
         j["components"] = _def.requiredComponentName;
         j["priority"] = 0;
         j["category"] = "gameplay";
-        if (!writeFile(jsonPath, j.dump(2) + "\n"))
+        if (!fileio::writeFile(jsonPath, j.dump(2) + "\n"))
             return {{}, "Ecriture impossible (fichier verrouille ?)."};
 
         std::ostringstream hpp;
@@ -110,35 +104,65 @@ namespace systemgen
             << "public:\n"
             << "    void update(ee::ecs::World &_world, float _dt) override;\n"
             << "};\n";
-        if (!writeFile(hppPath, hpp.str()))
+        if (!fileio::writeFile(hppPath, hpp.str()))
             return {{}, "Ecriture impossible (fichier verrouille ?)."};
+
+        // Composants du projet de la signature : leur header, relatif au .cpp
+        // (Systems/ -> ../Components/). Ceux du moteur viennent de Components.hpp.
+        const fs::path componentsDir = _systemsDir.parent_path() / "Components";
+        std::vector<std::string> gameComponents;
+        for (const std::string &c : _def.requiredComponentName)
+            if (fs::exists(componentsDir / (c + ".hpp"), ec))
+                gameComponents.push_back(c);
 
         std::ostringstream cpp;
         cpp << "#include \"Systems/" << name << ".hpp\"\n\n"
             << "#include \"ecs/World.hpp\"\n"
             << "#include \"input/InputManager.hpp\"\n"
-            << "#include \"visu/components/Components.hpp\" // composants moteur (Transform, formes...)\n"
-            << "// + #include \"Components/TonComposant.hpp\" pour tes composants de jeu\n\n"
+            << "#include \"visu/components/Components.hpp\" // composants moteur (Transform, "
+               "formes...)\n";
+        for (const std::string &c : gameComponents)
+            cpp << "#include \"../Components/" << c << ".hpp\"\n";
+        if (gameComponents.empty())
+            cpp << "// + #include \"../Components/TonComposant.hpp\" pour tes composants de jeu\n";
+        cpp << "\n"
             << "void " << name << "::update(ee::ecs::World &_world, float _dt)\n"
             << "{\n"
             << "    for (ee::ecs::EntityID e : m_entities)\n"
             << "    {\n"
             << "        // Acces typé aux composants de la signature :\n";
         for (const std::string &c : _def.requiredComponentName)
-            cpp << "        // " << c << " &" << varNameFor(c)
-                << " = *_world.getComponent<" << c << ">(e);\n";
-        cpp << "        // Entree du frame : ee::input::InputManager::getInstance().IsKeyDown(ee::input::Key::W)\n"
-            << "        // TODO: ta logique (ex. " << (_def.requiredComponentName.empty() ? "..." : varNameFor(_def.requiredComponentName.front()))
+            cpp << "        // " << c << " &" << varNameFor(c) << " = *_world.getComponent<" << c
+                << ">(e);\n";
+        cpp << "        // Entree du frame : "
+               "ee::input::InputManager::getInstance().IsKeyDown(ee::input::Key::W)\n"
+            << "        // TODO: ta logique (ex. "
+            << (_def.requiredComponentName.empty() ? "..."
+                                                   : varNameFor(_def.requiredComponentName.front()))
             << " ...).\n"
             << "        (void)_world; (void)_dt; (void)e;\n"
             << "    }\n"
             << "}\n";
-        if (!writeFile(cppPath, cpp.str()))
+        if (!fileio::writeFile(cppPath, cpp.str()))
             return {{}, "Ecriture impossible (fichier verrouille ?)."};
 
         regenerateRegister(_systemsDir);
 
         return {cppPath, {}};
+    }
+
+    DeletePlan planDeleteSystem(const Project &_project, const std::string &_name)
+    {
+        DeletePlan plan;
+        plan.name = _name;
+        std::error_code ec;
+        for (const char *ext : {".json", ".hpp", ".cpp"})
+            if (fs::path file = _project.systemsDir() / (_name + ext); fs::exists(file, ec))
+                plan.files.push_back(file);
+        plan.codeRefs = codereferences::filesMentioning(
+            {_project.componentsDir(), _project.systemsDir(), _project.root() / "src"}, _name,
+            plan.files);
+        return plan;
     }
 
     std::string deleteSystem(const fs::path &_systemsDir, const std::string &_name)

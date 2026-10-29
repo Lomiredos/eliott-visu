@@ -1,0 +1,33 @@
+# Style du projet (le meme que le moteur) : accolades Allman, indentation 4.
+BasedOnStyle: Microsoft
+IndentWidth: 4
+ColumnLimit: 100
+AccessModifierOffset: -4
+NamespaceIndentation: All
+FixNamespaceComments: false
+PointerAlignment: Right
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+IndentCaseLabels: false
+SortIncludes: Never
+ReflowComments: false

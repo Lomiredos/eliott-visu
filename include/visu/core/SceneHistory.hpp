@@ -15,8 +15,9 @@
 class SceneHistory
 {
 public:
-    // Nouvelle scene chargee : historique vide, etat de reference = sauvegarde.
-    void reset(const SceneInfo &_scene);
+    // Historique vide. _saved : l'etat de reference est celui du disque
+    // (nouvelle scene chargee) ; sinon il a des modifications non sauvegardees.
+    void reset(const SceneInfo &_scene, bool _saved = true);
 
     // Une modification vient d'avoir lieu (appele par markSceneDirty).
     void touch() { m_pending = true; }

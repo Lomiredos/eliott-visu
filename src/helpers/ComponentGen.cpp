@@ -1,9 +1,16 @@
 #include "visu/helpers/ComponentGen.hpp"
 
+#include "visu/core/Project.hpp"
+#include "visu/helpers/CodeReferences.hpp"
+
+#include "visu/helpers/FileIO.hpp"
 #include "visu/helpers/NameValidation.hpp"
+#include "visu/helpers/ComponentCatalog.hpp"
+#include "visu/core/SystemInfo.hpp"
+
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -13,14 +20,6 @@ namespace fs = std::filesystem;
 
 namespace
 {
-    bool writeFile(const fs::path &_path, const std::string &_content)
-    {
-        std::ofstream f(_path, std::ios::binary);
-        if (!f)
-            return false; // fichier verrouille / lecture seule / chemin invalide
-        f << _content;
-        return f.good();
-    }
 
     std::string fieldDecl(const ComponentFieldDef &_f)
     {
@@ -41,11 +40,11 @@ namespace
     {
         const std::vector<std::string> names = componentgen::projectComponentNames(_dir);
 
-        writeFile(_dir / "RegisterComponents.hpp",
-                  "#pragma once\n\n"
-                  "#include <nlohmann/json.hpp>\n\n"
-                  "// Genere par EE-Visu : emet chaque composant du projet.\n"
-                  "void buildComponentCatalog(nlohmann::json &_components);\n");
+        fileio::writeFile(_dir / "RegisterComponents.hpp",
+                          "#pragma once\n\n"
+                          "#include <nlohmann/json.hpp>\n\n"
+                          "// Genere par EE-Visu : emet chaque composant du projet.\n"
+                          "void buildComponentCatalog(nlohmann::json &_components);\n");
 
         std::ostringstream cpp;
         cpp << "#include \"Components/RegisterComponents.hpp\"\n\n";
@@ -57,14 +56,15 @@ namespace
         for (const std::string &n : names)
             cpp << "    ee::reflection::emitComponent<" << n << ">(_components);\n";
         cpp << "}\n";
-        writeFile(_dir / "RegisterComponents.cpp", cpp.str());
+        fileio::writeFile(_dir / "RegisterComponents.cpp", cpp.str());
 
         // --- Enregistrement des composants dans le World typé (runtime) ---
-        writeFile(_dir / "RegisterWorldComponents.hpp",
-                  "#pragma once\n\n"
-                  "#include \"visu/scene/WorldLoader.hpp\"\n\n"
-                  "// Genere par EE-Visu : enregistre les composants du jeu dans le World.\n"
-                  "void registerGameComponents(ee::scene::WorldRegistry &_reg);\n");
+        fileio::writeFile(
+            _dir / "RegisterWorldComponents.hpp",
+            "#pragma once\n\n"
+            "#include \"visu/scene/WorldLoader.hpp\"\n\n"
+            "// Genere par EE-Visu : enregistre les composants du jeu dans le World.\n"
+            "void registerGameComponents(ee::scene::WorldRegistry &_reg);\n");
 
         std::ostringstream world;
         world << "#include \"Components/RegisterWorldComponents.hpp\"\n\n";
@@ -75,7 +75,7 @@ namespace
         for (const std::string &n : names)
             world << "    _reg.reg<" << n << ">();\n";
         world << "}\n";
-        writeFile(_dir / "RegisterWorldComponents.cpp", world.str());
+        fileio::writeFile(_dir / "RegisterWorldComponents.cpp", world.str());
     }
 }
 
@@ -83,14 +83,9 @@ namespace componentgen
 {
     bool isComponentHeader(const fs::path &_hpp)
     {
-        if (_hpp.extension() != ".hpp")
-            return false;
-        std::ifstream f(_hpp, std::ios::binary);
-        if (!f)
-            return false;
-        std::ostringstream ss;
-        ss << f.rdbuf();
-        return ss.str().find("Reflect<" + _hpp.stem().string() + ">") != std::string::npos;
+        return _hpp.extension() == ".hpp" &&
+               fileio::readFile(_hpp).find("Reflect<" + _hpp.stem().string() + ">") !=
+                   std::string::npos;
     }
 
     std::vector<std::string> projectComponentNames(const fs::path &_componentsDir)
@@ -186,11 +181,137 @@ namespace componentgen
             hpp << "        _v.visit(\"" << f.name << "\", _c." << f.name << ");\n";
         hpp << "    }\n};\n";
 
-        if (!writeFile(hppPath, hpp.str()))
+        if (!fileio::writeFile(hppPath, hpp.str()))
             return {{}, "Ecriture impossible (fichier verrouille ?)."};
 
         regenerateRegister(_componentsDir);
 
         return {hppPath, {}};
+    }
+
+    int removeComponentInstances(SceneInfo &_scene, const std::string &_name)
+    {
+        int count = 0;
+        for (EntityInfo &ent : _scene.entities)
+        {
+            auto &comps = ent.components;
+            const auto it =
+                std::remove_if(comps.begin(), comps.end(),
+                               [&](const ComponentInstance &_c) { return _c.name == _name; });
+            if (it != comps.end())
+            {
+                comps.erase(it, comps.end());
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    DeletePlan planDeleteComponent(const Project &_project, const std::string &_name)
+    {
+        DeletePlan plan;
+        plan.name = _name;
+        std::error_code ec;
+        for (const char *ext : {".hpp", ".cpp"})
+            if (fs::path file = _project.componentsDir() / (_name + ext); fs::exists(file, ec))
+                plan.files.push_back(file);
+
+        for (fs::directory_iterator it(_project.scenesDataDir(), ec), end; it != end && !ec;
+             it.increment(ec))
+        {
+            if (it->path().extension() != ".json")
+                continue;
+            if (std::optional<SceneInfo> scene = loadScene(it->path()))
+                if (int n = removeComponentInstances(*scene, _name); n > 0)
+                {
+                    plan.scenes.push_back(it->path());
+                    plan.instances += n;
+                }
+        }
+
+        for (fs::directory_iterator it(_project.systemsDir(), ec), end; it != end && !ec;
+             it.increment(ec))
+        {
+            if (it->path().extension() != ".json")
+                continue;
+            if (std::optional<SystemInfo> info = loadSystemInfo(it->path()))
+                if (std::find(info->components.begin(), info->components.end(), _name) !=
+                    info->components.end())
+                    plan.systems.push_back(it->path());
+        }
+
+        const ComponentCatalog::PerField<FieldValue> &defaults =
+            componentCatalog(_project.componentsCatalog()).defaults;
+        plan.inCatalog = defaults.count(_name) != 0;
+
+        plan.codeRefs = codereferences::filesMentioning(
+            {_project.componentsDir(), _project.systemsDir(), _project.root() / "src"}, _name,
+            plan.files);
+        return plan;
+    }
+
+    std::string deleteComponent(const Project &_project, const DeletePlan &_plan)
+    {
+        if (_plan.name.empty())
+            return "Nom de composant invalide.";
+        std::string failed;
+        auto fail = [&](const fs::path &_file) { failed += " " + _file.filename().string(); };
+
+        for (const fs::path &file : _plan.files)
+        {
+            std::error_code ec;
+            fs::remove(file, ec);
+            if (ec)
+                fail(file);
+        }
+        // Meme en cas d'echec partiel : les registres refletent les headers restants.
+        regenerateRegister(_project.componentsDir());
+
+        for (const fs::path &file : _plan.scenes)
+        {
+            std::optional<SceneInfo> scene = loadScene(file);
+            if (!scene ||
+                (removeComponentInstances(*scene, _plan.name) > 0 && !saveScene(*scene, file)))
+                fail(file);
+        }
+
+        for (const fs::path &file : _plan.systems)
+        {
+            nlohmann::json j = nlohmann::json::parse(fileio::readFile(file), nullptr, false);
+            if (!j.is_object() || !j.contains("components") || !j["components"].is_array())
+            {
+                fail(file);
+                continue;
+            }
+            nlohmann::json &comps = j["components"];
+            comps.erase(std::remove(comps.begin(), comps.end(), _plan.name), comps.end());
+            if (!fileio::writeFile(file, j.dump(2) + "\n"))
+                fail(file);
+        }
+
+        // Catalogue : plus d'entree pour lui, ni de "requires" qui le vise.
+        if (_plan.inCatalog)
+        {
+            const fs::path catalogFile = _project.componentsCatalog();
+            nlohmann::json j = nlohmann::json::parse(fileio::readFile(catalogFile), nullptr, false);
+            if (j.is_object() && j.contains("components") && j["components"].is_array())
+            {
+                nlohmann::json &comps = j["components"];
+                comps.erase(std::remove_if(comps.begin(), comps.end(), [&](const nlohmann::json &_c)
+                                           { return _c.value("name", "") == _plan.name; }),
+                            comps.end());
+                for (nlohmann::json &comp : comps)
+                    if (comp.contains("fields") && comp["fields"].is_array())
+                        for (nlohmann::json &field : comp["fields"])
+                            if (field.value("requires", "") == _plan.name)
+                                field["requires"] = "";
+                if (!fileio::writeFile(catalogFile, j.dump(2) + "\n"))
+                    fail(catalogFile);
+            }
+        }
+
+        if (!failed.empty())
+            return "Suppression incomplete (fichier verrouille ?) :" + failed;
+        return {};
     }
 }

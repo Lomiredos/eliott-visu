@@ -43,8 +43,8 @@ namespace entityclipboard
         j["root"] = _root;
         j["ids"] = ids; // index d'origine de chaque entite copiee
         j["entities"] = sceneToJson(part)["entities"];
-        j["rootWorld"] = {w.pos.x, w.pos.y, w.pos.z, w.eulerDeg.x, w.eulerDeg.y, w.eulerDeg.z,
-                          w.scale.x, w.scale.y, w.scale.z};
+        j["rootWorld"] = {w.pos.x,      w.pos.y,   w.pos.z,   w.eulerDeg.x, w.eulerDeg.y,
+                          w.eulerDeg.z, w.scale.x, w.scale.y, w.scale.z};
         return j.dump();
     }
 
@@ -111,7 +111,8 @@ namespace entityclipboard
                         hasParent = *p >= 0;
             std::vector<float> w = j.value("rootWorld", std::vector<float>{});
             if (tf && !hasParent && !sameScene && w.size() == 9)
-                ee::scene::writeLocalXform(*tf, ee::scene::makeXform({w[0], w[1], w[2]}, {w[3], w[4], w[5]},
+                ee::scene::writeLocalXform(*tf, ee::scene::makeXform({w[0], w[1], w[2]},
+                                                                     {w[3], w[4], w[5]},
                                                                      {w[6], w[7], w[8]}));
         }
 

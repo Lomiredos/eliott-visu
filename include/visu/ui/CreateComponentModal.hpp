@@ -25,16 +25,15 @@ private:
     std::vector<ComponentFieldDef> m_fields;
     std::vector<std::string> m_componentNames; // choix du composant requis (champ entity)
 
-    std::function<void(ComponentInfoCreation)> m_onClose;
+    std::function<void(const ComponentInfoCreation &)> m_onClose;
 
     ComponentInfoCreation buildResult();
 
 public:
     // _componentNames : composants existants, proposes comme composant requis
     // d'un champ "entity". _name : nom pre-rempli (recherche de l'inspecteur).
-    CreateComponentModal(std::function<void(ComponentInfoCreation)> _cb,
-                         std::vector<std::string> _componentNames = {},
-                         std::string _name = "");
-    const char *Id() const override { return "CreateComponentModal"; }
-    bool Draw() override;
+    CreateComponentModal(std::function<void(const ComponentInfoCreation &)> _cb,
+                         std::vector<std::string> _componentNames = {}, std::string _name = "");
+    const char *id() const override { return "CreateComponentModal"; }
+    bool draw() override;
 };

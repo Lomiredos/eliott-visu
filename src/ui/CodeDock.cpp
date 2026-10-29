@@ -22,9 +22,10 @@ void CodeDock::draw()
         if (p->isDockedIn(m_dockId) && p->path() == m_pendingFor && p->dockNode() != 0)
         {
             std::unique_ptr<ShowCodePanel> cpp = std::make_unique<ShowCodePanel>(m_pendingCpp);
-            cpp->dock.splitSource = p->dockNode();
-            cpp->dock.splitDir = Dir::Right;
-            cpp->dock.splitRatio = 0.5f;
+            DockRequest &dock = cpp->dockRequest();
+            dock.splitSource = p->dockNode();
+            dock.splitDir = Dir::Right;
+            dock.splitRatio = 0.5f;
             App::getInstance().requestPanel(std::move(cpp));
             m_pendingCpp.clear();
             m_pendingFor.clear();
@@ -79,7 +80,7 @@ void CodeDock::open(const fs::path &_path)
     else
     {
         std::unique_ptr<ShowCodePanel> panel = std::make_unique<ShowCodePanel>(_path);
-        panel->dock.dockTarget = m_dockId;
+        panel->dockRequest().dockTarget = m_dockId;
         app.requestPanel(std::move(panel));
     }
 
@@ -99,6 +100,6 @@ void CodeDock::open(const fs::path &_path)
         // rester affiche avec le code d'un autre systeme.
         for (ShowCodePanel *p : free)
             if (p->path().extension() == ".cpp")
-                p->visible = false;
+                p->setVisible(false);
     }
 }

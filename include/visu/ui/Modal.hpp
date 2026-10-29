@@ -4,6 +4,7 @@ class Modal
 {
 public:
     virtual ~Modal() = default;
-    virtual const char *Id() const = 0;
-    virtual bool Draw() = 0;
+    virtual const char *id() const = 0;
+    // Dessine la modale ; true quand elle est terminee (a detruire).
+    virtual bool draw() = 0;
 };

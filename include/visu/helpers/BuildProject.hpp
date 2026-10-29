@@ -25,8 +25,7 @@ namespace projectbuild
     // fichiers caches) et que le cache cmake : rien a recompiler, Play peut le
     // lancer sans passer par cmake (qui coute plusieurs secondes sous Windows
     // meme sans rien a faire).
-    bool upToDate(const std::filesystem::path &_projectRoot,
-                  const std::filesystem::path &_exe);
+    bool upToDate(const std::filesystem::path &_projectRoot, const std::filesystem::path &_exe);
 
     class AsyncBuild
     {
@@ -37,8 +36,7 @@ namespace projectbuild
         // apres un build reussi (sa sortie s'ajoute au log, son code decide ok).
         // false si un build tourne deja (celui-ci ou un autre : un seul cmake a
         // la fois dans build/).
-        bool start(const std::filesystem::path &_projectRoot,
-                   const std::string &_target = "",
+        bool start(const std::filesystem::path &_projectRoot, const std::string &_target = "",
                    const std::filesystem::path &_then = {});
         bool running() const;
 

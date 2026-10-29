@@ -34,9 +34,9 @@ namespace
     }
 }
 
-void EngineSettingsPanel::draw(Project *project)
+void EngineSettingsPanel::draw(Project *_project)
 {
-    if (!project || !project->isValid())
+    if (!_project || !_project->isValid())
     {
         ImGui::TextDisabled("Aucun projet ouvert");
         return;
@@ -94,13 +94,13 @@ void EngineSettingsPanel::draw(Project *project)
     }
     // Ecrit le fichier quand on lache le reglage (pas a chaque frame d'un drag).
     if (m_dirty && !ImGui::IsAnyItemActive())
-        save(project);
+        save(_project);
 }
 
-void EngineSettingsPanel::save(Project *project)
+void EngineSettingsPanel::save(Project *_project)
 {
     m_dirty = false;
-    if (ee::core::saveEngineSettingsFile(project->root() / ee::core::kEngineSettingsPath, m_edit))
+    if (ee::core::saveEngineSettingsFile(_project->root() / ee::core::kEngineSettingsPath, m_edit))
         m_status.clear();
     else
         m_status = "Ecriture impossible.";

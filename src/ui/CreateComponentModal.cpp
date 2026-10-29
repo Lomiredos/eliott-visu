@@ -5,12 +5,14 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
-CreateComponentModal::CreateComponentModal(std::function<void(ComponentInfoCreation)> _cb,
+#include <utility>
+
+CreateComponentModal::CreateComponentModal(std::function<void(const ComponentInfoCreation &)> _cb,
                                            std::vector<std::string> _componentNames,
                                            std::string _name)
     : m_name(std::move(_name)), m_componentNames(std::move(_componentNames))
 {
-    m_onClose = _cb;
+    m_onClose = std::move(_cb);
     m_fields.push_back({"", "float"}); // un champ vide par defaut
 }
 
@@ -24,11 +26,11 @@ ComponentInfoCreation CreateComponentModal::buildResult()
     return res;
 }
 
-bool CreateComponentModal::Draw()
+bool CreateComponentModal::draw()
 {
     bool finished = false;
 
-    if (ImGui::BeginPopupModal(Id(), NULL, 0))
+    if (ImGui::BeginPopupModal(id(), nullptr, 0))
     {
         ImGui::InputTextWithHint("Component Name", "Your name...", &m_name);
         ImGui::Separator();
@@ -91,8 +93,9 @@ bool CreateComponentModal::Draw()
         ImGui::Separator();
         bool nameValid = namevalidation::isValidIdentifier(m_name);
         if (!m_name.empty() && !nameValid)
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                               "Nom invalide (identifiant C++ : lettres/chiffres/_, pas de chiffre en tete).");
+            ImGui::TextColored(
+                ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                "Nom invalide (identifiant C++ : lettres/chiffres/_, pas de chiffre en tete).");
         if (!nameValid)
             ImGui::BeginDisabled();
         if (ImGui::Button("Créer"))

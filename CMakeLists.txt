@@ -124,15 +124,16 @@ add_executable(eliott-visu
     src/ui/ComponentPanel.cpp
     src/ui/MainPanel.cpp
     src/ui/ShowCodePanel.cpp
-    src/ui/FileReader.cpp
+    src/ui/DeletionSummary.cpp
     src/helpers/OpenExternal.cpp
+    src/helpers/FileIO.cpp
+    src/helpers/CodeReferences.cpp
     src/helpers/SystemGen.cpp
-    src/ui/Modal.cpp
     src/ui/ConfirmModal.cpp
     src/ui/CreateSystemModal.cpp
     src/ui/CreateComponentModal.cpp
     src/ui/CreateSceneModal.cpp
-    src/helpers/ComponentGetter.cpp
+    src/helpers/ComponentCatalog.cpp
     src/helpers/ComponentGen.cpp
     src/helpers/SceneGen.cpp
     src/helpers/GenerateCatalog.cpp

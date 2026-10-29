@@ -1,0 +1,15 @@
+{
+    // Autocompletion / saut a la definition : clangd, a partir de
+    // build/compile_commands.json (genere par "cmake --preset default").
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build",
+        // Autorise clangd a demander ses dossiers d'include au compilateur
+        // (sinon les headers standard de MinGW sont introuvables sous Windows).
+        "--query-driver=**/g++*,**/gcc*,**/c++*",
+        "--header-insertion=never"
+    ],
+    // Pas d'IA dans ce projet.
+    "github.copilot.enable": { "*": false },
+    "chat.disableAIFeatures": true
+}

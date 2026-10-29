@@ -1,9 +1,10 @@
 #pragma once
+
 #include <filesystem>
-void openInDefaultApp(const std::filesystem::path &path);
 
-// Ouvre un fichier dans VS Code (`code <path>`). Necessite `code` dans le PATH.
-void openInVSCode(const std::filesystem::path &path);
-
-// Lance un executable (dossier de travail = dossier de l'exe).
-void launchProgram(const std::filesystem::path &exePath);
+// Ouvre _file dans VS Code, sans bloquer l'editeur, avec _workspace (la
+// racine du projet) comme dossier de travail : si une fenetre l'a deja
+// ouvert, VS Code la remet devant et y affiche le fichier (pas de nouvelle
+// fenetre), et les reglages du projet (.vscode/, clangd) s'appliquent.
+// Necessite `code` dans le PATH.
+void openInVSCode(const std::filesystem::path &_file, const std::filesystem::path &_workspace);

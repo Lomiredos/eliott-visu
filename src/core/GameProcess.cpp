@@ -1,6 +1,7 @@
 #include "visu/core/GameProcess.hpp"
 
 #include "visu/core/SceneJson.hpp"
+#include "visu/helpers/FileIO.hpp"
 
 #include <glad/glad.h>
 #define GLFW_INCLUDE_NONE
@@ -8,8 +9,6 @@
 
 #include <chrono>
 #include <cstring>
-#include <fstream>
-#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -33,7 +32,6 @@ namespace fs = std::filesystem;
 
 namespace
 {
-    // Nom unique du bloc de memoire partagee (plusieurs editeurs possibles).
     std::string uniqueShmName()
     {
         static int s_counter = 0;
@@ -45,7 +43,10 @@ namespace
         return "ee_visu_" + std::to_string(pid) + "_" + std::to_string(s_counter++);
     }
 
-    void sleepMs(int _ms) { std::this_thread::sleep_for(std::chrono::milliseconds(_ms)); }
+    void sleepMs(int _ms)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(_ms));
+    }
 }
 
 GameProcess::~GameProcess()
@@ -53,8 +54,8 @@ GameProcess::~GameProcess()
     stop(); // jamais de jeu orphelin
 }
 
-bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
-                        ee::ipc::PlayMode _mode, std::string &_error)
+bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath, ee::ipc::PlayMode _mode,
+                        std::string &_error)
 {
     stop();
     acknowledgeCrash();
@@ -69,9 +70,7 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     m_mode = _mode;
     m_logPath = _logPath;
 
-    // Seul le mode preview est relie a l'editeur (image, inputs, inspecteur).
-    // En fenetre separee, le jeu tourne en autonome : on ne garde que le
-    // process (Stop, detection de crash, log).
+    
     const bool linked = _mode == ee::ipc::PlayMode::Preview;
     const std::string envPrefix = std::string(ee::ipc::kEditorHostEnv) + "=";
     std::string hostVar;
@@ -99,7 +98,6 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     }
 
 #ifdef _WIN32
-    // Environnement = celui de l'editeur (sans EE_EDITOR_HOST herite) + le notre.
     std::wstring hostVarW(hostVar.begin(), hostVar.end());
     std::wstring prefixW(envPrefix.begin(), envPrefix.end());
     std::vector<wchar_t> env;
@@ -118,9 +116,9 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     env.push_back(L'\0');
 
     SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE}; // le jeu herite du log
-    HANDLE logHandle = CreateFileW(_logPath.wstring().c_str(), GENERIC_WRITE,
-                                   FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, CREATE_ALWAYS,
-                                   FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE logHandle =
+        CreateFileW(_logPath.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
     STARTUPINFOW si{};
     si.cb = sizeof(si);
@@ -134,23 +132,20 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     std::wstring cmd = L"\"" + _exe.wstring() + L"\"";
     std::wstring dir = _exe.parent_path().wstring();
     BOOL ok = CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, TRUE,
-                             CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, env.data(),
-                             dir.c_str(), &si, &pi);
+                             CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, env.data(), dir.c_str(),
+                             &si, &pi);
     if (logHandle != INVALID_HANDLE_VALUE)
         CloseHandle(logHandle);
     if (!ok)
     {
-        _error = "Lancement du jeu impossible (CreateProcess, erreur " + std::to_string(GetLastError()) + ").";
+        _error = "Lancement du jeu impossible (CreateProcess, erreur " +
+                 std::to_string(GetLastError()) + ").";
         cleanup();
         return false;
     }
     CloseHandle(pi.hThread);
     m_process = pi.hProcess;
 #else
-    // Tout est prepare AVANT le fork : l'enfant n'appelle que des fonctions
-    // sures (chdir, open, dup2, execve).
-    // Chemins absolus : l'enfant fait chdir avant open/execve, un chemin
-    // relatif y serait resolu depuis le mauvais dossier.
     std::string exe = fs::absolute(_exe, ec).string();
     std::string dir = fs::path(exe).parent_path().string();
     std::string logPath = fs::absolute(_logPath, ec).string();
@@ -190,7 +185,7 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
     m_pid = pid;
 #endif
 
-    m_state = linked ? State::Starting : State::Running; // fenetre : rien a attendre
+    m_state = linked ? State::Starting : State::Running; 
     m_stopRequested = false;
     m_startTime = std::chrono::steady_clock::now();
     return true;
@@ -236,8 +231,6 @@ void GameProcess::update()
     std::string how;
     if (processExited(clean, how))
     {
-        // Sortie normale (Stop, fenetre du jeu fermee) : retour a l'edition.
-        // Sinon : crash, l'editeur reste vivant et affiche le log.
         if (clean || m_stopRequested)
             m_state = State::Idle;
         else
@@ -255,7 +248,6 @@ void GameProcess::stop()
         return;
     m_stopRequested = true;
 
-    // Fenetre separee : pas de lien pour demander l'arret, on ferme le jeu.
     if (m_mode == ee::ipc::PlayMode::Window)
     {
         kill();
@@ -266,14 +258,13 @@ void GameProcess::stop()
 
     m_conn.send(ee::ipc::msgStop());
 
-    // Laisse ~1 s au jeu pour sortir proprement, sinon on le tue.
     bool clean = false;
     std::string how;
     bool exited = false;
     for (int i = 0; i < 100 && !exited; ++i)
     {
         std::vector<nlohmann::json> ignored;
-        m_conn.poll(ignored); // envoie le Stop s'il etait encore en attente
+        m_conn.poll(ignored); 
         exited = processExited(clean, how);
         if (!exited)
             sleepMs(10);
@@ -475,10 +466,7 @@ void GameProcess::sendSetField(int _entity, const std::string &_comp, const std:
 
 std::string GameProcess::log() const
 {
-    std::ifstream f(m_logPath, std::ios::binary);
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    std::string s = ss.str();
+    std::string s = fileio::readFile(m_logPath);
     const size_t kMax = 64 * 1024; // garde la fin : c'est la qu'est le crash
     if (s.size() > kMax)
         s = "[...]\n" + s.substr(s.size() - kMax);
