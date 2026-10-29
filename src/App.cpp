@@ -520,8 +520,9 @@ void App::updateHistory() {
     redo();
 }
 
-// Raccourcis globaux : Ctrl+S, Ctrl+B, Ctrl+P, Ctrl+Shift+B, et en deux temps Ctrl+O puis P
-// (Ctrl tenu ou non) dans la seconde = ouvrir un projet.
+// Raccourcis globaux : Ctrl+S, Ctrl+B, Ctrl+P, Ctrl+Shift+B, Ctrl+Shift+A, et en deux temps
+// (Ctrl tenu ou non, dans la seconde) Ctrl+O puis P = ouvrir un projet, Ctrl+G
+// puis C = generer le catalogue.
 void App::handleShortcuts() {
   // Ctrl+S marche aussi pendant une saisie ; pas pendant le Play (la scene
   // affichee est celle du jeu, sauvegardee au lancement).
@@ -531,18 +532,37 @@ void App::handleShortcuts() {
 
   // Requetes de la frame precedente non consommees (Main cache) : perdues.
   m_buildRequested = m_playRequested = m_rebuildPlayRequested = false;
+  m_addComponentRequested = m_catalogRequested = false;
 
   if (ImGui::GetIO().WantTextInput) {
-    m_ctrlOTime = -1.0;
+    m_ctrlOTime = m_ctrlGTime = -1.0;
     return;
   }
   const double now = ImGui::GetTime();
   if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) {
     m_ctrlOTime = now;
+    m_ctrlGTime = -1.0;
+    return;
+  }
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_G)) {
+    m_ctrlGTime = now;
+    m_ctrlOTime = -1.0;
     return;
   }
   if (m_ctrlOTime >= 0.0 && now - m_ctrlOTime > 1.0)
     m_ctrlOTime = -1.0;
+  if (m_ctrlGTime >= 0.0 && now - m_ctrlGTime > 1.0)
+    m_ctrlGTime = -1.0;
+
+  // C juste apres Ctrl+G = generer le catalogue (prioritaire sur Ctrl+C).
+  if (m_ctrlGTime >= 0.0) {
+    if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+      m_ctrlGTime = -1.0;
+      if (m_project && m_project->isValid())
+        m_catalogRequested = true;
+    }
+    return;
+  }
 
   // P juste apres Ctrl+O = ouvrir un projet (prioritaire sur Ctrl+P).
   if (m_ctrlOTime >= 0.0) {
@@ -565,6 +585,8 @@ void App::handleShortcuts() {
     m_playRequested = true;
   if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_B))
     m_rebuildPlayRequested = true;
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_A))
+    m_addComponentRequested = true;
 }
 
 // Liste des commandes (Ctrl+K) : assets/Commands.json du depot, relu a chaque

@@ -31,9 +31,10 @@ private:
 
 public:
     // _componentNames : composants existants, proposes comme composant requis
-    // d'un champ "entity".
+    // d'un champ "entity". _name : nom pre-rempli (recherche de l'inspecteur).
     CreateComponentModal(std::function<void(ComponentInfoCreation)> _cb,
-                         std::vector<std::string> _componentNames = {});
+                         std::vector<std::string> _componentNames = {},
+                         std::string _name = "");
     const char *Id() const override { return "CreateComponentModal"; }
     bool Draw() override;
 };

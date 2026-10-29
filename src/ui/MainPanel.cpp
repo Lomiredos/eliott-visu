@@ -7,6 +7,8 @@
 #include "visu/helpers/ComponentGetter.hpp"
 #include "visu/helpers/OpenExternal.hpp"
 #include "visu/helpers/SceneGen.hpp"
+#include "visu/ui/BuildProgress.hpp"
+#include "visu/ui/ComponentPanel.hpp" // openCreateComponent
 #include "visu/ui/ConfirmModal.hpp"
 #include "visu/ui/CreateSceneModal.hpp"
 
@@ -27,6 +29,7 @@
 #include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -612,35 +615,107 @@ static void drawInspector(App &app, Project *project,
 
   ImGui::Separator();
 
+  // Add Component (ou Ctrl+Shift+A) : recherche, fleches + Entree, et en
+  // dernier "Creer un nouveau composant" (nom = la recherche).
+  static std::string s_addFilter;
+  static int s_addHighlight = 0;
+  static bool s_addFocus = false;
+  static std::string s_addStatus;
+
+  const bool addKey = app.consumeAddComponentRequest() && !playing;
   ImGui::BeginDisabled(playing);
-  if (ImGui::Button("Add Component"))
+  if (ImGui::Button("Add Component") || addKey) {
     ImGui::OpenPopup("add_comp");
+    s_addFilter.clear();
+    s_addHighlight = 0;
+    s_addFocus = true;
+  }
   ImGui::EndDisabled();
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("Ctrl+Shift+A");
+  if (!s_addStatus.empty())
+    ImGui::TextDisabled("%s", s_addStatus.c_str());
 
   if (ImGui::BeginPopup("add_comp")) {
     std::map<std::string, std::map<std::string, FieldValue>> catalog =
         getAllComponentDefaults(project->componentsCatalog());
 
-    bool any = false;
+    // Fleches haut/bas gerees par le champ (CallbackHistory) : la navigation
+    // clavier d'ImGui ne lui vole pas le focus.
+    if (s_addFocus) {
+      ImGui::SetKeyboardFocusHere();
+      s_addFocus = false;
+    }
+    ImGui::SetNextItemWidth(260.0f);
+    bool enter = ImGui::InputTextWithHint(
+        "##addsearch", ICON_FA_MAGNIFYING_GLASS " Rechercher...", &s_addFilter,
+        ImGuiInputTextFlags_EnterReturnsTrue |
+            ImGuiInputTextFlags_CallbackHistory,
+        [](ImGuiInputTextCallbackData *_d) {
+          int *h = static_cast<int *>(_d->UserData);
+          *h += _d->EventKey == ImGuiKey_UpArrow ? -1 : 1;
+          return 0;
+        },
+        &s_addHighlight);
+
+    auto lower = [](std::string _s) {
+      std::transform(_s.begin(), _s.end(), _s.begin(),
+                     [](unsigned char _c) { return (char)std::tolower(_c); });
+      return _s;
+    };
+    const std::string needle = lower(s_addFilter);
+    std::vector<const std::string *> matches;
     for (const auto &entry : catalog) {
       const std::string &cname = entry.first;
       bool already = std::any_of(
           ent.components.begin(), ent.components.end(),
           [&](const ComponentInstance &ci) { return ci.name == cname; });
-      if (already)
-        continue;
-
-      any = true;
-      if (ImGui::Selectable(cname.c_str())) {
-        ComponentInstance ci;
-        ci.name = cname;
-        ci.values = entry.second;
-        ent.components.push_back(std::move(ci));
-        app.markSceneDirty();
-      }
+      if (!already && lower(cname).find(needle) != std::string::npos)
+        matches.push_back(&cname);
     }
-    if (!any)
-      ImGui::TextDisabled("(rien a ajouter)");
+
+    // Derniere ligne = creer un composant.
+    const int count = static_cast<int>(matches.size()) + 1;
+    s_addHighlight = ((s_addHighlight % count) + count) % count;
+
+    std::string toAdd;
+    bool create = false;
+    for (int i = 0; i < static_cast<int>(matches.size()); ++i) {
+      bool hl = i == s_addHighlight;
+      if (ImGui::Selectable(matches[i]->c_str(), hl) || (enter && hl))
+        toAdd = *matches[i];
+      if (hl)
+        ImGui::SetScrollHereY();
+    }
+    if (matches.empty())
+      ImGui::TextDisabled(s_addFilter.empty() ? "(rien a ajouter)"
+                                              : "Aucun composant ne correspond");
+
+    ImGui::Separator();
+    std::string createLabel = ICON_FA_PLUS " Creer un nouveau composant";
+    if (!s_addFilter.empty())
+      createLabel += " \"" + s_addFilter + "\"";
+    bool createHl = s_addHighlight == count - 1;
+    if (ImGui::Selectable(createLabel.c_str(), createHl) || (enter && createHl))
+      create = true;
+
+    if (!toAdd.empty()) {
+      ComponentInstance ci;
+      ci.name = toAdd;
+      ci.values = catalog[toAdd];
+      ent.components.push_back(std::move(ci));
+      app.markSceneDirty();
+      s_addStatus.clear();
+      ImGui::CloseCurrentPopup();
+    } else if (create) {
+      ImGui::CloseCurrentPopup();
+      openCreateComponent(project, s_addFilter, [](const std::string &_s) {
+        s_addStatus = _s == "Composant cree."
+                          ? "Composant cree : genere le catalogue (panneau "
+                            "Component) pour pouvoir l'ajouter."
+                          : _s;
+      });
+    }
 
     ImGui::EndPopup();
   }
@@ -757,11 +832,41 @@ static void readOnlyLog(const char *_id, std::string &_text) {
 
 static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
                           std::string &buildLog, bool &openBuildErrorPopup,
-                          MainPanel::PlayState &play) {
+                          MainPanel::PlayState &play,
+                          projectbuild::AsyncBuild &build,
+                          bool &launchAfterBuild) {
   GameProcess &game = app.game();
+  auto launchGame = [&]() {
+    std::string err;
+    std::filesystem::path log = project->root() / "build" / "play.log";
+    if (game.start(project->executablePath(), log, play.mode, err)) {
+      buildStatus.clear();
+      play.status.clear();
+    } else
+      play.status = err;
+  };
+
+  // Fin du build (thread) : erreur, ou lancement du jeu si c'etait un Play.
+  projectbuild::BuildResult r;
+  if (build.finished(r)) {
+    if (!r.ok) {
+      buildStatus = launchAfterBuild ? "Echec du build : jeu non lance."
+                                     : "Echec du build.";
+      buildLog = r.log;
+      openBuildErrorPopup = true;
+    } else if (launchAfterBuild)
+      launchGame();
+    else
+      buildStatus = "Build OK.";
+    launchAfterBuild = false;
+  }
+  // Un build du catalogue (panneau Component) bloque aussi : un seul cmake a
+  // la fois dans build/.
+  const bool building = projectbuild::AsyncBuild::anyRunning();
+
   // Ctrl+Shift+B : build + Play ; si le jeu tourne, il est arrete et relance
   // (stop est synchrone : le Play part dans la meme frame).
-  const bool rebuildPlayKey = app.consumeRebuildPlayRequest();
+  const bool rebuildPlayKey = app.consumeRebuildPlayRequest() && !building;
   if (rebuildPlayKey && game.running()) {
     game.stop();
     // Nouvelle session : la vue repart de la scene, pas du vieux snapshot.
@@ -772,42 +877,33 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
   }
   const bool playing = game.running();
   // Raccourcis Ctrl+B / Ctrl+P (lus par App), equivalents aux boutons.
-  const bool buildKey = app.consumeBuildRequest() && !playing;
+  const bool buildKey = app.consumeBuildRequest() && !playing && !building;
   const bool playKey = app.consumePlayRequest() || rebuildPlayKey;
 
-  ImGui::BeginDisabled(playing);
+  ImGui::BeginDisabled(playing || building);
   if (ImGui::Button("Build") || buildKey) {
-    projectbuild::BuildResult r = projectbuild::build(project->root());
-    if (r.ok)
-      buildStatus = "Build OK.";
-    else {
-      buildStatus = "Echec du build.";
-      buildLog = r.log;
-      openBuildErrorPopup = true;
-    }
+    launchAfterBuild = false;
+    build.start(project->root());
   }
   ImGui::EndDisabled();
   ImGui::SameLine();
 
   if (!playing) {
-    // Play = sauvegarde + build incremental + lancement (process separe).
-    if (ImGui::Button(ICON_FA_PLAY " Play") || playKey) {
+    // Play = sauvegarde + build si une source a change + lancement (process
+    // separe) ; apres un build, le lancement se fait a sa fin (plus haut).
+    // Ctrl+Shift+B recompile toujours.
+    ImGui::BeginDisabled(building);
+    if (ImGui::Button(ICON_FA_PLAY " Play") || (playKey && !building)) {
       app.saveCurrentScene();
-      projectbuild::BuildResult r = projectbuild::build(project->root());
-      if (!r.ok) {
-        buildStatus = "Echec du build : jeu non lance.";
-        buildLog = r.log;
-        openBuildErrorPopup = true;
-      } else {
-        std::string err;
-        std::filesystem::path log = project->root() / "build" / "play.log";
-        if (game.start(project->executablePath(), log, play.mode, err)) {
-          buildStatus.clear();
-          play.status.clear();
-        } else
-          play.status = err;
+      if (!rebuildPlayKey &&
+          projectbuild::upToDate(project->root(), project->executablePath()))
+        launchGame();
+      else {
+        launchAfterBuild = true;
+        build.start(project->root());
       }
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     int mode = play.mode == ee::ipc::PlayMode::Window ? 1 : 0;
     ImGui::SetNextItemWidth(150.0f);
@@ -840,7 +936,11 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
       ImGui::TextDisabled("En cours (preview)");
   }
 
-  if (!buildStatus.empty())
+  if (build.running())
+    drawBuildProgress(build, launchAfterBuild ? "Build avant Play" : "Build");
+  else if (building)
+    ImGui::TextDisabled("Generation du catalogue en cours...");
+  else if (!buildStatus.empty())
     ImGui::TextDisabled("%s", buildStatus.c_str());
   if (!play.status.empty())
     ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", play.status.c_str());
@@ -1352,7 +1452,7 @@ void MainPanel::draw(Project *project) {
   ImGui::Text("Projet ouvert : %s", project->name().c_str());
   ImGui::Separator();
   drawBuildPlay(app, project, m_buildStatus, m_buildLog, m_openBuildErrorPopup,
-                m_play);
+                m_play, m_build, m_launchAfterBuild);
   ImGui::Separator();
   drawScenePreview(app, m_preview, m_nav, m_play);
   ImGui::EndChild();

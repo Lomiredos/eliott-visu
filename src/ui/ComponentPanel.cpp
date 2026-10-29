@@ -12,6 +12,7 @@
 #include "visu/ui/CreateComponentModal.hpp"
 #include "visu/helpers/ComponentGen.hpp"
 #include "visu/helpers/GenerateCatalog.hpp"
+#include "visu/ui/BuildProgress.hpp"
 #include "visu/helpers/ComponentGetter.hpp"
 
 #include <set>
@@ -38,6 +39,56 @@ static std::vector<std::string> componentNames(Project *_project)
     return {names.begin(), names.end()};
 }
 
+void openCreateComponent(Project *_project, const std::string &_name,
+                         std::function<void(const std::string &)> _onStatus)
+{
+    fs::path dir = _project->componentsDir();
+    App::getInstance().openModal(std::make_unique<CreateComponentModal>(
+        [dir, _onStatus](ComponentInfoCreation _data)
+        {
+            componentgen::CreateResult r = componentgen::createComponent(dir, _data);
+            if (r.error.empty())
+            {
+                _onStatus("Composant cree.");
+                openInVSCode(r.path);
+            }
+            else
+                _onStatus(r.error);
+        },
+        componentNames(_project), _name));
+}
+
+void ComponentPanel::drawHidden()
+{
+    m_code.keepAlive();
+    Project *project = App::getInstance().project();
+    if (project && project->isValid())
+        updateCatalog(project, false);
+}
+
+// Raccourci Ctrl+G, C + fin de la generation (resultat, popup d'erreur).
+void ComponentPanel::updateCatalog(Project *project, bool _visible)
+{
+    if (App::getInstance().consumeCatalogRequest() &&
+        !catalog::start(m_catalogBuild, project->root()))
+        m_status = "Un build est deja en cours.";
+
+    projectbuild::BuildResult r;
+    if (!m_catalogBuild.finished(r))
+        return;
+    if (r.ok)
+    {
+        m_status = "Catalogue genere.";
+        return;
+    }
+    m_status = "Echec de la compilation.";
+    m_buildLog = r.log;
+    m_openErrorPopup = true;
+    // Onglet cache : on le met devant, sinon le popup d'erreur reste invisible.
+    if (!_visible)
+        ImGui::SetWindowFocus(name());
+}
+
 void ComponentPanel::draw(Project *project)
 {
     if (!project || !project->isValid())
@@ -54,41 +105,27 @@ void ComponentPanel::draw(Project *project)
                       ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
 
     if (ImGui::Button("Create new Component"))
-    {
-        App &app = App::getInstance();
-        // Genere <projet>/Components/<Nom>.hpp (struct + Reflect), regenere
-        // RegisterComponents, puis ouvre le .hpp dans VS Code.
-        app.openModal(std::make_unique<CreateComponentModal>([dir, this](ComponentInfoCreation _data)
-                                                             {
-                                                                 componentgen::CreateResult r = componentgen::createComponent(dir, _data);
-                                                                 if (r.error.empty())
-                                                                 {
-                                                                     m_status = "Composant cree.";
-                                                                     openInVSCode(r.path);
-                                                                 }
-                                                                 else
-                                                                     m_status = r.error;
-                                                             },
-                                                             componentNames(project)));
-    }
+        openCreateComponent(project, "", [this](const std::string &_s) { m_status = _s; });
 
     ImGui::SameLine();
 
     // Generation par VRAIE compilation : compile gen_components (test de
     // validite des structs), puis ecrit Components.json ; sinon popup d'erreur.
+    // Dans un thread, avec barre de progression ; grise pendant tout build
+    // (Build/Play du panneau Main compris : un seul cmake a la fois).
+    updateCatalog(project, true);
+    const bool building = projectbuild::AsyncBuild::anyRunning();
+    ImGui::BeginDisabled(building);
     if (ImGui::Button("Generate catalog (build)"))
-    {
-        catalog::GenResult r = catalog::generate(project->root());
-        if (r.ok)
-            m_status = "Catalogue genere.";
-        else
-        {
-            m_status = "Echec de la compilation.";
-            m_buildLog = r.log;
-            m_openErrorPopup = true;
-        }
-    }
-    if (!m_status.empty())
+        catalog::start(m_catalogBuild, project->root());
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Ctrl+G, C");
+    if (m_catalogBuild.running())
+        drawBuildProgress(m_catalogBuild, "Catalogue");
+    else if (building)
+        ImGui::TextDisabled("Build du jeu en cours...");
+    else if (!m_status.empty())
         ImGui::TextDisabled("%s", m_status.c_str());
 
     // Popup d'erreur (bloquant) : montre la sortie du compilo.

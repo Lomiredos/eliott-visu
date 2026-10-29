@@ -6,8 +6,9 @@
 #include <imgui_stdlib.h>
 
 CreateComponentModal::CreateComponentModal(std::function<void(ComponentInfoCreation)> _cb,
-                                           std::vector<std::string> _componentNames)
-    : m_componentNames(std::move(_componentNames))
+                                           std::vector<std::string> _componentNames,
+                                           std::string _name)
+    : m_name(std::move(_name)), m_componentNames(std::move(_componentNames))
 {
     m_onClose = _cb;
     m_fields.push_back({"", "float"}); // un champ vide par defaut

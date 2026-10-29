@@ -4,6 +4,7 @@
 #include "visu/ui/ScenePreview.hpp"
 
 #include "visu/core/SceneInfo.hpp"
+#include "visu/helpers/BuildProject.hpp"
 #include "visu/ipc/Protocol.hpp"
 
 #include <cstdint>
@@ -62,6 +63,8 @@ private:
   std::string m_buildStatus;
   std::string m_buildLog;
   bool m_openBuildErrorPopup = false;
+  projectbuild::AsyncBuild m_build; // Build / Play (thread)
+  bool m_launchAfterBuild = false;  // Play : lancer le jeu si le build reussit
 
   std::string m_sceneStatus;
 };

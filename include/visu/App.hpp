@@ -44,9 +44,12 @@ private:
   bool m_openCommandList = false; // Ctrl+K
   std::string m_commandFilter;
   double m_ctrlOTime = -1.0; // Ctrl+O en attente de P
+  double m_ctrlGTime = -1.0; // Ctrl+G en attente de C
+  bool m_catalogRequested = false; // Ctrl+G, C : traite par ComponentPanel (meme onglet cache)
   bool m_buildRequested = false; // Ctrl+B, traite par MainPanel
   bool m_playRequested = false;  // Ctrl+P (Play ou Stop)
   bool m_rebuildPlayRequested = false; // Ctrl+Shift+B (relance si en jeu)
+  bool m_addComponentRequested = false; // Ctrl+Shift+A, traite par l'inspecteur
   struct Command {
     std::string keys, description;
   };
@@ -100,6 +103,11 @@ public:
   // Raccourcis Build / Play : vrais une seule frame, consommes par MainPanel.
   bool consumeBuildRequest() { return std::exchange(m_buildRequested, false); }
   bool consumePlayRequest() { return std::exchange(m_playRequested, false); }
+  bool consumeCatalogRequest() { return std::exchange(m_catalogRequested, false); }
+  Project *project() const { return m_project.get(); }
+  bool consumeAddComponentRequest() {
+    return std::exchange(m_addComponentRequested, false);
+  }
   bool consumeRebuildPlayRequest() {
     return std::exchange(m_rebuildPlayRequested, false);
   }
