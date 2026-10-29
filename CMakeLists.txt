@@ -127,6 +127,8 @@ add_executable(eliott-visu
     src/ui/FolderTree.cpp
     src/ui/SystemPanel.cpp
     src/ui/MaterialPanel.cpp
+    src/ui/EngineSettingsPanel.cpp
+    src/helpers/EngineUpdate.cpp
     src/ui/CodeDock.cpp
     src/ui/ComponentPanel.cpp
     src/ui/MainPanel.cpp
@@ -177,6 +179,11 @@ configure_file(
     @ONLY
 )
 target_include_directories(eliott-visu PRIVATE "${CMAKE_BINARY_DIR}/generated")
+
+# Sources du moteur : l'editeur verifie au lancement s'il y a des commits a
+# recuperer (git fetch) et propose un pull.
+target_compile_definitions(eliott-visu PRIVATE
+    EE_ENGINE_DIR="${CMAKE_SOURCE_DIR}/extern/eliott-engine-3d")
 
 target_link_libraries(eliott-visu PRIVATE
     ee-core          # coeur moteur : amene aussi glad, glfw, OpenGL, nlohmann_json, eliott-ecs, eliott-input

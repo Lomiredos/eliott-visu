@@ -47,6 +47,7 @@ void MaterialPanel::draw(Project *project)
         ImGui::TextDisabled("Aucun projet ouvert");
         return;
     }
+    refresh(project);
 
     ImGui::BeginChild("##materials", ImVec2(260.0f, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
@@ -83,6 +84,7 @@ void MaterialPanel::drawList(Project *project)
         {
             m_status = "Materiau cree.";
             m_newName.clear();
+            refresh(project, true);
             select(project, rel);
         }
         else
@@ -94,10 +96,9 @@ void MaterialPanel::drawList(Project *project)
         ImGui::TextDisabled("%s", m_status.c_str());
     ImGui::Separator();
 
-    std::vector<std::string> mats = listAssets(project->root(), {".mat"});
-    if (mats.empty())
+    if (m_mats.empty())
         ImGui::TextDisabled("Aucun materiau (Assets/**/*.mat)");
-    for (const std::string &m : mats)
+    for (const std::string &m : m_mats)
     {
         std::string label = fs::path(m).stem().string() + "##" + m;
         if (ImGui::Selectable(label.c_str(), m == m_selected))
@@ -119,24 +120,63 @@ void MaterialPanel::drawList(Project *project)
             {
                 fs::path file = project->root() / m;
                 std::string rel = m;
+                Project *proj = project;
                 App::getInstance().openModal(std::make_unique<ConfirmModal>(
                     "Supprimer le materiau ?",
                     "Supprimer " + rel + " ?\nLes entites qui l'utilisent repasseront en couleur unie.",
                     std::vector<ModalChoice>{
                         {"Supprimer",
-                         [this, file, rel]()
+                         [this, file, rel, proj]()
                          {
                              std::error_code ec;
                              fs::remove(file, ec);
                              if (m_selected == rel)
+                             {
                                  m_selected.clear();
+                                 m_dirty = false;
+                             }
                              m_status = ec ? "Suppression impossible." : "Materiau supprime.";
+                             refresh(proj, true);
                          }},
                         {"Annuler", nullptr}}));
             }
             ImGui::EndPopup();
         }
     }
+}
+
+// Liste des .mat et etat du fichier selectionne, relus au plus 1 fois/s
+// (parcourir Assets/ a chaque frame coute cher sur un gros projet).
+void MaterialPanel::refresh(Project *project, bool _force)
+{
+    auto now = std::chrono::steady_clock::now();
+    if (!_force && now - m_lastRefresh < std::chrono::seconds(1))
+        return;
+    m_lastRefresh = now;
+    m_mats = listAssets(project->root(), {".mat"});
+
+    if (m_selected.empty())
+        return;
+    std::error_code ec;
+    m_exists = fs::exists(project->root() / m_selected, ec) && !ec;
+
+    // Modifie hors de l'editeur (texte, git...) : on relit si rien n'est en cours.
+    if (m_exists && !m_dirty && selectedMtime(project) != m_mtime)
+    {
+        if (auto loaded = ee::core::loadMaterialFile(project->root() / m_selected))
+        {
+            m_edit = *loaded;
+            m_status = "Recharge (modifie hors de l'editeur).";
+        }
+        m_mtime = selectedMtime(project);
+    }
+}
+
+fs::file_time_type MaterialPanel::selectedMtime(Project *project) const
+{
+    std::error_code ec;
+    auto t = fs::last_write_time(project->root() / m_selected, ec);
+    return ec ? fs::file_time_type{} : t;
 }
 
 void MaterialPanel::select(Project *project, const std::string &_path)
@@ -146,6 +186,8 @@ void MaterialPanel::select(Project *project, const std::string &_path)
     m_selected = _path;
     auto loaded = ee::core::loadMaterialFile(project->root() / _path);
     m_edit = loaded ? *loaded : ee::core::MaterialAsset{};
+    m_mtime = selectedMtime(project);
+    m_exists = loaded.has_value() || fs::exists(project->root() / _path);
     m_dirty = false;
 }
 
@@ -154,8 +196,26 @@ void MaterialPanel::save(Project *project)
     m_dirty = false;
     if (m_selected.empty())
         return;
-    if (!ee::core::saveMaterialFile(project->root() / m_selected, m_edit))
-        m_status = "Ecriture impossible : " + m_selected;
+    const fs::path file = project->root() / m_selected;
+
+    // Le fichier a change sur le disque depuis qu'on l'a lu : on ne l'ecrase
+    // pas, on reprend la version du disque.
+    // Sinon (ou en cas d'echec d'ecriture), le cache revient a ce qui est sur le
+    // disque : les entites n'affichent pas des valeurs non enregistrees.
+    bool conflict = selectedMtime(project) != m_mtime;
+    if (conflict || !ee::core::saveMaterialFile(file, m_edit))
+    {
+        m_status = conflict ? "Modifie hors de l'editeur : retouche annulee, fichier recharge."
+                            : "Ecriture impossible : " + m_selected;
+        if (auto onDisk = ee::core::loadMaterialFile(file))
+        {
+            m_edit = *onDisk;
+            ee::core::setMaterialInCache(m_selected, *onDisk);
+        }
+        m_mtime = selectedMtime(project);
+        return;
+    }
+    m_mtime = selectedMtime(project);
     ee::core::setMaterialInCache(m_selected, m_edit);
 }
 
@@ -215,7 +275,7 @@ void MaterialPanel::drawEditor(Project *project)
         ImGui::TextDisabled("Selectionne ou cree un materiau");
         return;
     }
-    if (!fs::exists(project->root() / m_selected))
+    if (!m_exists)
     {
         ImGui::TextDisabled("Fichier introuvable : %s", m_selected.c_str());
         return;
@@ -237,6 +297,16 @@ void MaterialPanel::drawEditor(Project *project)
         m_gl.beginScene(cam, ps, ps);
         m_gl.setLights(ee::render::Lights{});
         ee::render::Material mat = ee::systems::renderMaterial(m_gl, m_edit);
+        // Transparent : damier derriere, pour voir a travers.
+        if (m_edit.transparent)
+            for (int x = -3; x <= 3; ++x)
+                for (int y = -3; y <= 3; ++y)
+                {
+                    float c = ((x + y) & 1) ? 0.85f : 0.25f;
+                    m_gl.drawMesh(m_gl.builtin(ee::render::Prim::Cube),
+                                  {x * 0.5f, y * 0.5f, -1.6f}, {0.5f, 0.5f, 0.05f},
+                                  {0.0f, 0.0f, 0.0f}, ee::render::Color{c, c, c});
+                }
         if (m_previewShape == 0)
             m_gl.drawMesh(m_gl.builtin(ee::render::Prim::Sphere), {0, 0, 0}, {1, 1, 1},
                           {0.0f, m_previewYaw * 57.29578f, 0.0f}, mat);
@@ -244,10 +314,16 @@ void MaterialPanel::drawEditor(Project *project)
             m_gl.drawMesh(m_gl.builtin(ee::render::Prim::Cube), {0, 0, 0}, {1.4f, 1.4f, 1.4f},
                           {20.0f, m_previewYaw * 57.29578f, 0.0f}, mat);
         m_gl.endScene();
-        ImGui::Image((ImTextureID)(intptr_t)m_gl.texture(), ImVec2((float)ps, (float)ps),
-                     ImVec2(0, 1), ImVec2(1, 0));
-        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f))
+        // ImGui::Image n'est pas cliquable : bouton invisible dessous pour le drag.
+        ImVec2 p0 = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##preview", ImVec2((float)ps, (float)ps));
+        if (ImGui::IsItemActive())
             m_previewYaw += ImGui::GetIO().MouseDelta.x * 0.01f;
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)m_gl.texture(), p0,
+                                             ImVec2(p0.x + ps, p0.y + ps),
+                                             ImVec2(0, 1), ImVec2(1, 0));
         ImGui::SameLine();
         ImGui::BeginGroup();
         ImGui::RadioButton("Sphere", &m_previewShape, 0);
@@ -269,6 +345,16 @@ void MaterialPanel::drawEditor(Project *project)
     changed |= ImGui::SliderFloat("Normal force", &m_edit.normalStrength, 0.0f, 3.0f);
     changed |= ImGui::DragFloat2("Tiling", m_edit.tiling, 0.05f, -100.0f, 100.0f);
     changed |= ImGui::DragFloat2("Offset", m_edit.offset, 0.01f, -100.0f, 100.0f);
+    changed |= ImGui::Checkbox("Transparent", &m_edit.transparent);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Verre, eau... : dessine apres les objets opaques.\n"
+                          "Les reflets restent entiers, seul le diffus s'efface.");
+    ImGui::BeginDisabled(!m_edit.transparent);
+    changed |= ImGui::SliderFloat("Opacite", &m_edit.opacity, 0.0f, 1.0f);
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("0 = invisible sauf les reflets, 1 = opaque.\n"
+                          "Multipliee par l'alpha de la map Albedo.");
+    ImGui::EndDisabled();
     ImGui::PopItemWidth();
 
     ImGui::SeparatorText("Maps");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "visu/helpers/EngineUpdate.hpp"
 #include "visu/core/GameProcess.hpp"
 #include "visu/core/SceneHistory.hpp"
 #include "visu/core/SceneInfo.hpp"
@@ -52,6 +53,7 @@ private:
   std::vector<Command> m_commands; // relu a chaque Ctrl+K
 
   GameProcess m_game; // le jeu lance par Play (process separe)
+  engineupdate::Checker m_engineUpdate{EE_ENGINE_DIR}; // pull du moteur au lancement
 
   App();
   ~App();
@@ -64,6 +66,7 @@ public:
 
   bool init();
   void run();
+  void shutdown(); // a appeler apres run(), tant que GL est encore la
   void openProject(const std::filesystem::path &path);
   void requestPanel(std::unique_ptr<Panel> _panel);
   void openModal(std::unique_ptr<Modal> _modal);
@@ -127,6 +130,7 @@ public:
 
 private:
   void flushPanel();
+  void updateEngineUpdate(); // popups de mise a jour du moteur
   void drawMenuBar();
   void drawPanels();
   void updateHistory();

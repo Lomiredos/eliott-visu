@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <iostream>
 
 int main(int argc, char *argv[]) {
   App &app = App::getInstance();
@@ -20,6 +21,7 @@ int main(int argc, char *argv[]) {
   app.openProject(projectPath);
 
   app.run();
-
+  app.shutdown();
+ std::cout << "ceci est un test\n";
   return 0;
 }

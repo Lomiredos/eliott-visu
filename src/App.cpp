@@ -8,6 +8,7 @@
 #include "visu/ui/ConfirmModal.hpp"
 #include "visu/ui/MainPanel.hpp"
 #include "visu/ui/MaterialPanel.hpp"
+#include "visu/ui/EngineSettingsPanel.hpp"
 #include "visu/ui/Modal.hpp"
 #include "visu/ui/EditorCommands.hpp"
 #include "visu/ui/Panel.hpp"
@@ -74,26 +75,84 @@ static void buildDefaultLayout(ImGuiID dockspace_id, const ImVec2 &size) {
   ImGui::DockBuilderDockWindow("System", dockspace_id);
   ImGui::DockBuilderDockWindow("Component", dockspace_id);
   ImGui::DockBuilderDockWindow("Materials", dockspace_id);
+  ImGui::DockBuilderDockWindow("Reglages", dockspace_id);
 
   ImGui::DockBuilderFinish(dockspace_id);
 }
 
 App::App() = default;
 
-App::~App() {
+App::~App() { shutdown(); }
+
+// Pas dans le destructeur seul : celui du singleton tourne pendant exit(),
+// quand le chargeur GL n'est plus fiable (crash dans ImGui_ImplOpenGL3_Shutdown).
+void App::shutdown() {
   // Le jeu ne doit jamais survivre a l'editeur ; sa texture est liberee
   // tant que le contexte GL existe encore.
   m_game.stop();
-  if (m_window)
-    m_game.releaseGl();
+  if (!m_window)
+    return;
+  m_game.releaseGl();
 
-  if (m_window) {
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+  glfwMakeContextCurrent(m_window);
+  // Panneaux et modale peuvent tenir des ressources GL (apercus...).
+  m_currentModal.reset();
+  m_pendingPanels.clear();
+  m_panels.clear();
 
-    glfwDestroyWindow(m_window);
-    glfwTerminate();
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
+  ImGui::DestroyContext();
+
+  glfwDestroyWindow(m_window);
+  glfwTerminate();
+  m_window = nullptr;
+}
+
+// Resultat de la verification du moteur (thread) -> popups. Attend qu'aucune
+// autre modale ne soit ouverte.
+void App::updateEngineUpdate() {
+  using engineupdate::State;
+  if (m_currentModal)
+    return;
+  switch (m_engineUpdate.state()) {
+  case State::UpdateAvailable: {
+    std::string commits = m_engineUpdate.commits();
+    int n = static_cast<int>(std::count(commits.begin(), commits.end(), '\n'));
+    // Pas de liste interminable dans la popup.
+    std::istringstream lines(commits);
+    std::string shown, line;
+    for (int i = 0; i < 10 && std::getline(lines, line); ++i)
+      shown += "  " + line + "\n";
+    if (n > 10)
+      shown += "  ... (" + std::to_string(n - 10) + " autres)\n";
+    openModal(std::make_unique<ConfirmModal>(
+        "Mise a jour du moteur",
+        "eliott-engine-3d : " + std::to_string(n) +
+            (n > 1 ? " nouveaux commits" : " nouveau commit") + " sur le depot.\n\n" +
+            shown + "\nRecuperer la mise a jour (git pull) ?",
+        std::vector<ModalChoice>{
+            {"Mettre a jour", [this]() { m_engineUpdate.startPull(); }},
+            {"Plus tard", [this]() { m_engineUpdate.dismiss(); }}}));
+    break;
+  }
+  case State::Pulled:
+    m_engineUpdate.dismiss();
+    openModal(std::make_unique<ConfirmModal>(
+        "Moteur mis a jour",
+        "Le moteur est a jour.\nRecompile l'editeur pour en profiter :\n"
+        "  cmake --build build",
+        std::vector<ModalChoice>{{"OK", nullptr}}));
+    break;
+  case State::PullFailed:
+    m_engineUpdate.dismiss();
+    openModal(std::make_unique<ConfirmModal>(
+        "Mise a jour impossible",
+        "git pull a echoue :\n\n" + m_engineUpdate.log(),
+        std::vector<ModalChoice>{{"OK", nullptr}}));
+    break;
+  default:
+    break;
   }
 }
 
@@ -172,7 +231,9 @@ bool App::init() {
   requestPanel(std::make_unique<ComponentPanel>());
   requestPanel(std::make_unique<MainPanel>());
   requestPanel(std::make_unique<MaterialPanel>());
+  requestPanel(std::make_unique<EngineSettingsPanel>());
   flushPanel();
+  m_engineUpdate.startCheck();
   return true;
 }
 
@@ -583,6 +644,7 @@ void App::run() {
         m_currentModal.reset();
     }
 
+    updateEngineUpdate();
     updateHistory();
     handleShortcuts();
     drawCommandList();

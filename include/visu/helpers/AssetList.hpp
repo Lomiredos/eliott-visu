@@ -18,13 +18,20 @@ inline std::vector<std::string> listAssets(const std::filesystem::path &_root,
     fs::path dir = _root / "Assets";
     for (fs::recursive_directory_iterator it(dir, ec), end; it != end && !ec; it.increment(ec))
     {
-        if (!it->is_regular_file())
+        if (!it->is_regular_file(ec) || ec)
+        {
+            ec.clear(); // lien casse, droits... : on saute ce fichier
             continue;
+        }
         std::string ext = it->path().extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(),
                        [](unsigned char _c) { return static_cast<char>(std::tolower(_c)); });
-        if (std::find(_exts.begin(), _exts.end(), ext) != _exts.end())
-            out.push_back(fs::relative(it->path(), _root, ec).generic_string());
+        if (std::find(_exts.begin(), _exts.end(), ext) == _exts.end())
+            continue;
+        std::string rel = fs::relative(it->path(), _root, ec).generic_string();
+        if (!ec && !rel.empty())
+            out.push_back(std::move(rel));
+        ec.clear();
     }
     std::sort(out.begin(), out.end());
     return out;

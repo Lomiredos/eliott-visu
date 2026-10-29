@@ -253,6 +253,11 @@
                     "default": 2.5,
                     "name": "intensity",
                     "type": "float"
+                },
+                {
+                    "default": true,
+                    "name": "shadows",
+                    "type": "bool"
                 }
             ],
             "name": "DirectionalLightComponent"
@@ -273,6 +278,11 @@
                     "default": 10.0,
                     "name": "range",
                     "type": "float"
+                },
+                {
+                    "default": true,
+                    "name": "shadows",
+                    "type": "bool"
                 }
             ],
             "name": "PointLightComponent"
