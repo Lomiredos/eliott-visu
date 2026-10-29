@@ -28,14 +28,8 @@ static std::vector<std::string> componentNames(Project *_project)
     std::set<std::string> names;
     for (const auto &kv : getAllComponentDefaults(_project->componentsCatalog()))
         names.insert(kv.first);
-    std::error_code ec;
-    for (fs::directory_iterator it(_project->componentsDir(), ec), end; it != end && !ec; it.increment(ec))
-    {
-        std::string stem = it->path().stem().string();
-        if (it->path().extension() == ".hpp" && stem != "RegisterComponents" &&
-            stem != "RegisterWorldComponents")
-            names.insert(stem);
-    }
+    for (const std::string &n : componentgen::projectComponentNames(_project->componentsDir()))
+        names.insert(n);
     return {names.begin(), names.end()};
 }
 
@@ -154,8 +148,10 @@ void ComponentPanel::draw(Project *project)
     ImGui::TextDisabled("Projet");
     fs::path clicked;
     if (fs::exists(dir))
+        // Tous les .hpp du projet (composants ou non) restent visibles ;
+        // seuls les registres generes sont masques.
         clicked = drawFolderTree(dir, openHpp, {".hpp"},
-                                 {"RegisterComponents", "RegisterWorldComponents", "Components"});
+                                 {"RegisterComponents", "RegisterWorldComponents"});
     else
         ImGui::TextDisabled("(aucun composant -- cree-en un)");
 

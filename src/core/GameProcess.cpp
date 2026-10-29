@@ -149,9 +149,11 @@ bool GameProcess::start(const fs::path &_exe, const fs::path &_logPath,
 #else
     // Tout est prepare AVANT le fork : l'enfant n'appelle que des fonctions
     // sures (chdir, open, dup2, execve).
-    std::string exe = _exe.string();
-    std::string dir = _exe.parent_path().string();
-    std::string logPath = _logPath.string();
+    // Chemins absolus : l'enfant fait chdir avant open/execve, un chemin
+    // relatif y serait resolu depuis le mauvais dossier.
+    std::string exe = fs::absolute(_exe, ec).string();
+    std::string dir = fs::path(exe).parent_path().string();
+    std::string logPath = fs::absolute(_logPath, ec).string();
     std::vector<char *> envp;
     for (char **e = environ; *e; ++e)
         if (std::strncmp(*e, envPrefix.c_str(), envPrefix.size()) != 0)

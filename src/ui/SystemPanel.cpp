@@ -51,36 +51,37 @@ void SystemPanel::draw(Project *project)
     ImGui::BeginChild("##systems", ImVec2(280.0f, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
 
+    // Toujours propose : createSystem cree Systems/ s'il manque.
+    if (ImGui::Button("Create new System"))
+    {
+        // Liste des composants = union moteur + projet, MEME source que
+        // l'inspecteur (getAllComponentDefaults). Fini la divergence.
+        std::vector<std::string> comps;
+        for (const auto &kv : getAllComponentDefaults(project->componentsCatalog()))
+            comps.push_back(kv.first);
+
+        App &app = App::getInstance();
+        // Genere le trio (.json/.hpp/.cpp) dans <projet>/Systems/, rebranche
+        // le registre, puis ouvre le stub .cpp dans VS Code.
+        app.openModal(std::make_unique<CreateSystemModal>(std::move(comps),
+                                                          [dir, this](SystemInfoCreation _data)
+                                                          {
+                                                              systemgen::CreateResult r = systemgen::createSystem(dir, _data);
+                                                              if (r.error.empty())
+                                                              {
+                                                                  m_status = "Systeme cree.";
+                                                                  openInVSCode(r.path);
+                                                              }
+                                                              else
+                                                                  m_status = r.error;
+                                                          }));
+    }
+
+    if (!m_status.empty())
+        ImGui::TextDisabled("%s", m_status.c_str());
+
     if (fs::exists(dir))
     {
-        if (ImGui::Button("Create new System"))
-        {
-            // Liste des composants = union moteur + projet, MEME source que
-            // l'inspecteur (getAllComponentDefaults). Fini la divergence.
-            std::vector<std::string> comps;
-            for (const auto &kv : getAllComponentDefaults(project->componentsCatalog()))
-                comps.push_back(kv.first);
-
-            App &app = App::getInstance();
-            // Genere le trio (.json/.hpp/.cpp) dans <projet>/Systems/, rebranche
-            // le registre, puis ouvre le stub .cpp dans VS Code.
-            app.openModal(std::make_unique<CreateSystemModal>(std::move(comps),
-                                                              [dir, this](SystemInfoCreation _data)
-                                                              {
-                                                                  systemgen::CreateResult r = systemgen::createSystem(dir, _data);
-                                                                  if (r.error.empty())
-                                                                  {
-                                                                      m_status = "Systeme cree.";
-                                                                      openInVSCode(r.path);
-                                                                  }
-                                                                  else
-                                                                      m_status = r.error;
-                                                              }));
-        }
-
-        if (!m_status.empty())
-            ImGui::TextDisabled("%s", m_status.c_str());
-
         ImGui::Separator();
 
         // Ouvre le .cpp (ou le .hpp si header-only) dans VS Code au double-click.
@@ -92,13 +93,20 @@ void SystemPanel::draw(Project *project)
         };
 
         // Systemes du PROJET (on masque le fichier de registration).
-        // Clic droit : suppression.
+        // Clic droit : suppression, seulement pour un systeme gere par
+        // l'editeur (trio a la racine de Systems/, avec son .json) : c'est
+        // le seul cas que deleteSystem et le registre savent traiter.
         ImGui::TextDisabled("Projet");
         clicked = drawFolderTree(dir, openCode, {".hpp"}, {"RegisterSystems"},
                                  [this, dir](const fs::path &p)
                                  {
-                                     if (ImGui::MenuItem("Supprimer"))
-                                         askDelete(dir, p.stem().string());
+                                     const std::string name = p.stem().string();
+                                     const bool managed = p.parent_path() == dir &&
+                                                          fs::exists(dir / (name + ".json"));
+                                     if (ImGui::MenuItem("Supprimer", nullptr, false, managed))
+                                         askDelete(dir, name);
+                                     if (!managed)
+                                         ImGui::SetItemTooltip("Systeme hors registre (sous-dossier ou sans .json) : a supprimer a la main.");
                                  });
 
         // Systemes MOTEUR (ee-core, submodule) -- lecture seule.

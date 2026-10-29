@@ -147,14 +147,17 @@ namespace systemgen
             return "Nom de systeme invalide.";
 
         std::string failed;
+        bool removedAny = false;
         for (const char *ext : {".json", ".hpp", ".cpp"})
         {
             fs::path p = _systemsDir / (_name + ext);
             std::error_code ec;
-            fs::remove(p, ec); // absent -> pas une erreur (ec reste vide)
+            removedAny |= fs::remove(p, ec); // absent -> false, pas une erreur
             if (ec)
                 failed += " " + p.filename().string();
         }
+        if (!removedAny && failed.empty())
+            return "Aucun fichier " + _name + ".* dans " + _systemsDir.string() + ".";
 
         // Meme en cas d'echec partiel : le registre doit refleter les .json restants.
         regenerateRegister(_systemsDir);

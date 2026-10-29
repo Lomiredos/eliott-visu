@@ -22,8 +22,10 @@ namespace
     // "[ 42%] Building..." (make) ou "[12/50] Building..." (ninja) -> 0..100.
     int parsePercent(const std::string &_line)
     {
-        int a = 0, b = 0;
-        if (std::sscanf(_line.c_str(), "[%d%%]", &a) == 1)
+        int a = 0, b = 0, n = 0;
+        // %n : sscanf renvoie 1 des que %d est lu, meme si le '%' qui suit
+        // ne correspond pas ("[12/50]") ; n n'est ecrit que si tout a matche.
+        if (std::sscanf(_line.c_str(), "[%d%%]%n", &a, &n) == 1 && n > 0)
             return std::clamp(a, 0, 100);
         if (std::sscanf(_line.c_str(), "[%d/%d]", &a, &b) == 2 && b > 0)
             return std::clamp(a * 100 / b, 0, 100);
@@ -117,11 +119,15 @@ namespace projectbuild
             std::error_code dirEc; // lien casse : on le saute, pas tout le parcours
             if (it->is_directory(dirEc))
             {
-                // build*/ : sorties de compilation (le cache cmake est vu a part).
+                // build*/ a la racine, ou tout dossier de build cmake (avec
+                // CMakeCache.txt) : sorties de compilation (le cache cmake est
+                // vu a part). Pas un simple prefixe a toute profondeur : un
+                // dossier de sources "buildings/" doit rester surveille.
                 // Assets/ a la racine : lu par le jeu au lancement, et le Play
                 // y sauvegarde la scene a chaque fois.
-                if (name.rfind("build", 0) == 0 ||
-                    (it.depth() == 0 && name == "Assets"))
+                std::error_code cacheEc;
+                if ((it.depth() == 0 && (name.rfind("build", 0) == 0 || name == "Assets")) ||
+                    fs::exists(it->path() / "CMakeCache.txt", cacheEc))
                     it.disable_recursion_pending();
                 continue;
             }

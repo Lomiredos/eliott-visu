@@ -834,7 +834,8 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
                           std::string &buildLog, bool &openBuildErrorPopup,
                           MainPanel::PlayState &play,
                           projectbuild::AsyncBuild &build,
-                          bool &launchAfterBuild) {
+                          bool &launchAfterBuild,
+                          std::filesystem::path &buildRoot) {
   GameProcess &game = app.game();
   auto launchGame = [&]() {
     std::string err;
@@ -849,7 +850,9 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
   // Fin du build (thread) : erreur, ou lancement du jeu si c'etait un Play.
   projectbuild::BuildResult r;
   if (build.finished(r)) {
-    if (!r.ok) {
+    if (buildRoot != project->root()) {
+      // Build d'un projet ferme depuis : ni lancement, ni statut ici.
+    } else if (!r.ok) {
       buildStatus = launchAfterBuild ? "Echec du build : jeu non lance."
                                      : "Echec du build.";
       buildLog = r.log;
@@ -883,7 +886,8 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
   ImGui::BeginDisabled(playing || building);
   if (ImGui::Button("Build") || buildKey) {
     launchAfterBuild = false;
-    build.start(project->root());
+    buildRoot = project->root();
+    build.start(buildRoot);
   }
   ImGui::EndDisabled();
   ImGui::SameLine();
@@ -900,7 +904,8 @@ static void drawBuildPlay(App &app, Project *project, std::string &buildStatus,
         launchGame();
       else {
         launchAfterBuild = true;
-        build.start(project->root());
+        buildRoot = project->root();
+        build.start(buildRoot);
       }
     }
     ImGui::EndDisabled();
@@ -1452,7 +1457,7 @@ void MainPanel::draw(Project *project) {
   ImGui::Text("Projet ouvert : %s", project->name().c_str());
   ImGui::Separator();
   drawBuildPlay(app, project, m_buildStatus, m_buildLog, m_openBuildErrorPopup,
-                m_play, m_build, m_launchAfterBuild);
+                m_play, m_build, m_launchAfterBuild, m_buildRoot);
   ImGui::Separator();
   drawScenePreview(app, m_preview, m_nav, m_play);
   ImGui::EndChild();

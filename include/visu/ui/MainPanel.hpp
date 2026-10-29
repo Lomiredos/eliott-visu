@@ -65,6 +65,7 @@ private:
   bool m_openBuildErrorPopup = false;
   projectbuild::AsyncBuild m_build; // Build / Play (thread)
   bool m_launchAfterBuild = false;  // Play : lancer le jeu si le build reussit
+  std::filesystem::path m_buildRoot; // projet du build en cours (change de projet -> resultat ignore)
 
   std::string m_sceneStatus;
 };

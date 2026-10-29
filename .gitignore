@@ -9,3 +9,4 @@ build-win/
 compile_commands.json
 vcpkg_installed/
 imgui.ini
+imgui.init

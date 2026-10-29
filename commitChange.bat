@@ -57,7 +57,11 @@ for /f "tokens=2" %%p in ('git config --file .gitmodules --get-regexp path') do 
 git diff --cached --quiet
 if errorlevel 1 (
     git commit -m "!BUMPMSG!"
-    echo Bump commit OK.
+    if errorlevel 1 (
+        echo [ERREUR] Echec du commit de bump.
+    ) else (
+        echo Bump commit OK.
+    )
 ) else (
     echo Aucun pointeur modifie, rien a bumper.
 )
@@ -98,13 +102,24 @@ if not defined HAS (
     goto :eof
 )
 
-REM si HEAD est detache, basculer sur la branche par defaut du remote
+REM si HEAD est detache, rattacher la branche par defaut du remote au commit
+REM courant : seulement si elle n'a rien que HEAD n'a pas (sinon le commit
+REM partirait d'une version plus ancienne et le pointeur reculerait).
 git symbolic-ref -q HEAD >nul
 if errorlevel 1 (
     set "BR="
     for /f "tokens=2 delims=/" %%b in ('git rev-parse --abbrev-ref origin/HEAD 2^>nul') do set "BR=%%b"
     if "!BR!"=="" set "BR=main"
-    git checkout !BR! 2>nul
+    git rev-parse -q --verify "refs/heads/!BR!" >nul
+    if not errorlevel 1 (
+        git merge-base --is-ancestor !BR! HEAD
+        if errorlevel 1 (
+            echo [!SUB!] la branche !BR! a des commits absents du commit courant, ignore ^(a fusionner a la main^).
+            popd
+            goto :eof
+        )
+    )
+    git checkout -B !BR! 2>nul
     if errorlevel 1 (
         echo [!SUB!] impossible de passer sur une branche ^(!BR!^), ignore.
         popd
@@ -121,8 +136,19 @@ if /i "!SAME!"=="o" (
     set /p "MSG=[!SUB!] Message de commit : "
 )
 
+if "!MSG!"=="" (
+    echo [!SUB!] message vide, commit ignore.
+    popd
+    goto :eof
+)
+
 git add -A
 git commit -m "!MSG!"
+if errorlevel 1 (
+    echo [!SUB!] echec du commit.
+    popd
+    goto :eof
+)
 echo [!SUB!] commit OK.
 popd
 goto :eof

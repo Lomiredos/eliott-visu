@@ -17,8 +17,10 @@ void openInDefaultApp(const std::filesystem::path &_path)
 
 void openInVSCode(const std::filesystem::path &_path)
 {
-    ShellExecuteW(nullptr, L"open", L"code", _path.wstring().c_str(),
-                  nullptr, SW_SHOWNORMAL);
+    // lpParameters est une ligne de commande : sans guillemets, un chemin
+    // avec espaces serait coupe en plusieurs arguments.
+    const std::wstring arg = L"\"" + _path.wstring() + L"\"";
+    ShellExecuteW(nullptr, L"open", L"code", arg.c_str(), nullptr, SW_SHOWNORMAL);
 }
 
 void launchProgram(const std::filesystem::path &_exePath)

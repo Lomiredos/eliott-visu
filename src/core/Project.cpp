@@ -2,7 +2,23 @@
 
 namespace fs = std::filesystem;
 
-Project::Project(fs::path root) : m_root(std::move(root)) {}
+namespace {
+// Chemin absolu, sans "..", ni separateur final : name() serait vide avec
+// "mygame/", et le jeu (qui fait chdir avant execve) ne retrouverait pas
+// un exe relatif.
+fs::path normalizeRoot(const fs::path &_root) {
+  std::error_code ec;
+  fs::path p = fs::absolute(_root, ec);
+  if (ec)
+    p = _root;
+  p = p.lexically_normal();
+  if (!p.has_filename() && p.has_parent_path() && p != p.root_path())
+    p = p.parent_path();
+  return p;
+}
+} // namespace
+
+Project::Project(fs::path root) : m_root(normalizeRoot(root)) {}
 
 bool Project::isValid() const { return fs::is_directory(m_root); }
 

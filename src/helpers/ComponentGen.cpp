@@ -39,18 +39,7 @@ namespace
 
     void regenerateRegister(const fs::path &_dir)
     {
-        std::vector<std::string> names;
-        std::error_code ec;
-        for (fs::directory_iterator it(_dir, ec), end; it != end && !ec; it.increment(ec))
-        {
-            const auto &entry = *it;
-            if (!entry.is_regular_file() || entry.path().extension() != ".hpp")
-                continue;
-            std::string stem = entry.path().stem().string();
-            if (stem == "RegisterComponents" || stem == "RegisterWorldComponents")
-                continue;
-            names.push_back(stem);
-        }
+        const std::vector<std::string> names = componentgen::projectComponentNames(_dir);
 
         writeFile(_dir / "RegisterComponents.hpp",
                   "#pragma once\n\n"
@@ -92,6 +81,30 @@ namespace
 
 namespace componentgen
 {
+    bool isComponentHeader(const fs::path &_hpp)
+    {
+        if (_hpp.extension() != ".hpp")
+            return false;
+        std::ifstream f(_hpp, std::ios::binary);
+        if (!f)
+            return false;
+        std::ostringstream ss;
+        ss << f.rdbuf();
+        return ss.str().find("Reflect<" + _hpp.stem().string() + ">") != std::string::npos;
+    }
+
+    std::vector<std::string> projectComponentNames(const fs::path &_componentsDir)
+    {
+        std::vector<std::string> names;
+        std::error_code ec;
+        for (fs::directory_iterator it(_componentsDir, ec), end; it != end && !ec; it.increment(ec))
+            if (it->is_regular_file() && isComponentHeader(it->path()))
+                names.push_back(it->path().stem().string());
+        // Ordre du dossier non garanti : registres generes stables d'une fois a l'autre.
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
     CreateResult createComponent(const fs::path &_componentsDir, const ComponentInfoCreation &_def)
     {
         // Nom invalide -> refus (identifiant C++ + nom de fichier surs).
