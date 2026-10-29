@@ -33,6 +33,7 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -63,6 +64,34 @@ static std::string GetExecutablePath() {
   return std::string(buffer);
 #else
   return std::filesystem::read_symlink("/proc/self/exe").string();
+#endif
+}
+
+// CMake portable installe par le hub (PC sans droits admin) dans
+// <dossier de l'exe>/tools/cmake : ajoute au PATH pour Build et catalogue,
+// meme quand l'editeur est lance sans passer par le hub.
+static void addPortableCMakeToPath() {
+  std::error_code ec;
+  std::filesystem::path bin =
+      std::filesystem::path(GetExecutablePath()).parent_path() / "tools" /
+      "cmake" / "bin";
+  if (!std::filesystem::is_directory(bin, ec))
+    return;
+#ifdef _WIN32
+  const char sep = ';';
+#else
+  const char sep = ':';
+#endif
+  const std::string dir = bin.make_preferred().string();
+  const char *current = std::getenv("PATH");
+  std::string path = current ? current : "";
+  if (path.find(dir) != std::string::npos)
+    return; // deja la (lance par le hub)
+  path = dir + sep + path;
+#ifdef _WIN32
+  _putenv_s("PATH", path.c_str());
+#else
+  setenv("PATH", path.c_str(), 1);
 #endif
 }
 
@@ -178,6 +207,7 @@ void App::flushPanel() {
 }
 
 bool App::init() {
+  addPortableCMakeToPath();
   glfwSetErrorCallback(glfw_error_callback);
   if (!glfwInit())
     return false;
