@@ -1,0 +1,11 @@
+build/
+build-release/
+build-windows/
+build-win/
+.cache/
+*.user
+.vs/
+.vscode/
+compile_commands.json
+vcpkg_installed/
+imgui.ini

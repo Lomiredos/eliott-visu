@@ -1,0 +1,306 @@
+{
+    "components": [
+        {
+            "name": "TransformComponent",
+            "fields": [
+                {
+                    "name": "PositionX",
+                    "type": "float"
+                },
+                {
+                    "name": "PositionY",
+                    "type": "float"
+                },
+                {
+                    "name": "PositionZ",
+                    "type": "float"
+                },
+                {
+                    "name": "EuleurX",
+                    "type": "float"
+                },
+                {
+                    "name": "EuleurY",
+                    "type": "float"
+                },
+                {
+                    "name": "EuleurZ",
+                    "type": "float"
+                },
+                {
+                    "name": "ScaleX",
+                    "type": "float",
+                    "default": 1.0
+                },
+                {
+                    "name": "ScaleY",
+                    "type": "float",
+                    "default": 1.0
+                },
+                {
+                    "name": "ScaleZ",
+                    "type": "float",
+                    "default": 1.0
+                },
+                {
+                    "name": "Parent",
+                    "type": "entity",
+                    "requires": "TransformComponent",
+                    "default": -1
+                }
+            ]
+        },
+        {
+            "name": "RigideBodyComponent",
+            "fields": [
+                {
+                    "name": "VelocityX",
+                    "type": "float"
+                },
+                {
+                    "name": "VelocityY",
+                    "type": "float"
+                },
+                {
+                    "name": "VelocityZ",
+                    "type": "float"
+                },
+                {
+                    "name": "isStatic",
+                    "type": "bool",
+                    "default": false
+                }
+            ]
+        },
+        {
+            "name": "SphereComponent",
+            "fields": [
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "default": 1.0
+                }
+            ]
+        },
+        {
+            "name": "RectComponent",
+            "fields": [
+                {
+                    "name": "sizeX",
+                    "type": "float",
+                    "default": 1.0
+                },
+                {
+                    "name": "sizeY",
+                    "type": "float",
+                    "default": 1.0
+                },
+                {
+                    "name": "sizeZ",
+                    "type": "float",
+                    "default": 1.0
+                }
+            ]
+        },
+        {
+            "name": "CapsuleComponent",
+            "fields": [
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "default": 0.5
+                },
+                {
+                    "name": "height",
+                    "type": "float",
+                    "default": 1.0
+                }
+            ]
+        },
+        {
+            "name": "MeshComponent",
+            "fields": [
+                {
+                    "name": "path",
+                    "type": "string",
+                    "default": ""
+                }
+            ]
+        },
+        {
+            "name": "ColliderComponent",
+            "fields": [
+                {
+                    "name": "Shape",
+                    "type": "enum",
+                    "default": "Sphere",
+                    "options": [
+                        "Sphere",
+                        "Box",
+                        "Capsule"
+                    ]
+                },
+                {
+                    "name": "OffSetX",
+                    "type": "float",
+                    "default": 0.0
+                },
+                {
+                    "name": "OffSetY",
+                    "type": "float",
+                    "default": 0.0
+                },
+                {
+                    "name": "OffSetZ",
+                    "type": "float",
+                    "default": 0.0
+                },
+                {
+                    "name": "EulerX",
+                    "type": "float",
+                    "default": 0.0
+                },
+                {
+                    "name": "EulerY",
+                    "type": "float",
+                    "default": 0.0
+                },
+                {
+                    "name": "EulerZ",
+                    "type": "float",
+                    "default": 0.0
+                },
+                {
+                    "name": "IsActive",
+                    "type": "bool",
+                    "default": true
+                },
+                {
+                    "name": "IsTrigger",
+                    "type": "bool",
+                    "default": false
+                },
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "default": 1.0
+                },
+                {
+                    "name": "HalfExtentsX",
+                    "type": "float",
+                    "default": 0.5
+                },
+                {
+                    "name": "HalfExtentsY",
+                    "type": "float",
+                    "default": 0.5
+                },
+                {
+                    "name": "HalfExtentsZ",
+                    "type": "float",
+                    "default": 0.5
+                },
+                {
+                    "name": "Height",
+                    "type": "float",
+                    "default": 2.0
+                }
+            ]
+        },
+        {
+            "name": "CameraComponent",
+            "fields": [
+                {
+                    "name": "fov",
+                    "type": "float",
+                    "default": 45.0
+                },
+                {
+                    "name": "nearZ",
+                    "type": "float",
+                    "default": 0.1
+                },
+                {
+                    "name": "farZ",
+                    "type": "float",
+                    "default": 200.0
+                },
+                {
+                    "name": "isMain",
+                    "type": "bool",
+                    "default": true
+                }
+            ]
+        },
+        {
+            "fields": [
+                {
+                    "default": "",
+                    "name": "path",
+                    "type": "string"
+                }
+            ],
+            "name": "MaterialComponent"
+        },
+        {
+            "fields": [
+                {
+                    "default": "#ffffff",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "default": 2.5,
+                    "name": "intensity",
+                    "type": "float"
+                },
+                {
+                    "default": true,
+                    "name": "shadows",
+                    "type": "bool"
+                }
+            ],
+            "name": "DirectionalLightComponent"
+        },
+        {
+            "fields": [
+                {
+                    "default": "#ffffff",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "default": 5.0,
+                    "name": "intensity",
+                    "type": "float"
+                },
+                {
+                    "default": 10.0,
+                    "name": "range",
+                    "type": "float"
+                },
+                {
+                    "default": true,
+                    "name": "shadows",
+                    "type": "bool"
+                }
+            ],
+            "name": "PointLightComponent"
+        },
+        {
+            "fields": [
+                {
+                    "default": "#ffffff",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "default": 0.25,
+                    "name": "intensity",
+                    "type": "float"
+                }
+            ],
+            "name": "AmbientLightComponent"
+        }
+    ]
+}

@@ -1,0 +1,4 @@
+#pragma once
+
+// Genere par CMake depuis assets/Components.json -- ne pas editer a la main.
+inline const char *kStandardComponentsJson = R"json(@STANDARD_COMPONENTS_JSON@)json";

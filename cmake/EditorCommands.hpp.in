@@ -1,0 +1,8 @@
+#pragma once
+
+// GENERE par CMake depuis assets/Commands.json : copie de secours integree au
+// binaire, utilisee quand le fichier source n'est pas sur la machine.
+namespace visu {
+inline constexpr const char *kEditorCommandsPath = "@EDITOR_COMMANDS_PATH@";
+inline constexpr const char *kEditorCommandsJson = R"EECMD(@EDITOR_COMMANDS_JSON@)EECMD";
+} // namespace visu
