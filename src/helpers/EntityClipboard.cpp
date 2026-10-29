@@ -1,7 +1,7 @@
 #include "visu/helpers/EntityClipboard.hpp"
 
 #include "visu/core/SceneJson.hpp"
-#include "visu/scene/Hierarchy.hpp"
+#include "visu/scene/SceneHierarchy.hpp"
 
 #include <nlohmann/json.hpp>
 

@@ -22,9 +22,9 @@
 #include <ImGuizmo.h>
 
 #include "visu/core/GameProcess.hpp"
-#include "visu/runtime/GameSession.hpp" // defaultCamera : picking en pause
+#include "visu/runtime/DefaultCamera.hpp" // picking en pause
 #include "visu/systems/RenderSystem.hpp"   // sceneCameras
-#include "visu/scene/Hierarchy.hpp"       // parent/enfant
+#include "visu/scene/SceneHierarchy.hpp"       // parent/enfant
 #include "visu/render/SplitScreen.hpp"
 #include "visu/runtime/GlfwKeys.hpp" // touches par position physique, comme le jeu
 
