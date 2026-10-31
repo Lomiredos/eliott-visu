@@ -161,9 +161,9 @@ static const std::vector<std::string> *assetFieldExtensions(const std::string &_
 {
     static const std::vector<std::string> mat = {".mat"};
     static const std::vector<std::string> obj = {".obj"};
-    if (_comp == "MaterialComponent" && _field == "path")
+    if (_comp == "MaterialComponent" && _field == "Path")
         return &mat;
-    if (_comp == "MeshComponent" && _field == "path")
+    if (_comp == "MeshComponent" && _field == "Path")
         return &obj;
     return nullptr;
 }
@@ -250,12 +250,12 @@ static void assignMaterial(SceneInfo &_scene, int _entity, const std::string &_p
     for (ComponentInstance &ci : _scene.entities[_entity].components)
         if (ci.name == "MaterialComponent")
         {
-            ci.values["path"] = _path;
+            ci.values["Path"] = _path;
             return;
         }
     ComponentInstance ci;
     ci.name = "MaterialComponent";
-    ci.values["path"] = _path;
+    ci.values["Path"] = _path;
     _scene.entities[_entity].components.push_back(std::move(ci));
 }
 
