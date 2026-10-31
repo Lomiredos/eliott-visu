@@ -16,7 +16,13 @@ struct LayoutNode{
     std::string text; //si on est un label
     std::vector<LayoutNode> children; // si on est un groupe
     bool isArray = false; // y'a besoins d'un commentaire la ?
+    // Tableau seulement : description d'un element (0 ou 1 noeud, cle
+    // "<tableau>.element"), pour dessiner les elements et en creer avec "+".
+    std::vector<LayoutNode> element;
 };
+
+// Taille d'un tableau dans les valeurs de scene (ecrite par SaveVisitor).
+inline std::string arrayCountKey(const std::string &_array) { return _array + ".#count"; }
 
 struct ComponentCatalog
 {
@@ -27,6 +33,11 @@ struct ComponentCatalog
     PerField<std::string> fieldTypes;
     PerField<std::vector<std::string>> enumOptions;
     PerField<std::string> entityFields;
+    // Valeurs par defaut des prototypes d'elements de tableau ("Pts.element",
+    // "Pts.element.hp") : a part de defaults, pour que ni le sync ni "Add
+    // Component" ne les mettent dans la scene. Les types, options d'enum et
+    // champs entity des prototypes sont dans les tables ci-dessus.
+    PerField<FieldValue> protoDefaults;
 
     std::map<std::string, std::vector<LayoutNode>> layouts;
 

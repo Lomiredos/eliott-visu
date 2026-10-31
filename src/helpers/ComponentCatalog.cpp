@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <iostream>
 
 namespace fs = std::filesystem;
@@ -51,8 +52,11 @@ namespace
         return _prefix.empty() ? _name : _prefix + "." + _name;
     }
 
+    // _proto : on lit le prototype d'un element de tableau -> valeurs par
+    // defaut dans protoDefaults (jamais dans defaults, cf. ComponentCatalog).
     std::vector<LayoutNode> parseNodes(const nlohmann::json &_nodes, const std::string &_prefix,
-                                       const std::string &_comp, ComponentCatalog &_out)
+                                       const std::string &_comp, ComponentCatalog &_out,
+                                       bool _proto = false)
     {
         std::vector<LayoutNode> result;
         if (_nodes.is_array() == false)
@@ -80,7 +84,8 @@ namespace
                     node.key = joinKey(_prefix, node.name);
                     
                     std::string type = j.value("type", "float");
-                    _out.defaults[_comp][node.key] = defaultValue(j, type);
+                    (_proto ? _out.protoDefaults : _out.defaults)[_comp][node.key] =
+                        defaultValue(j, type);
                     _out.fieldTypes[_comp][node.key] = type;
                     if (type == "enum")
                         _out.enumOptions[_comp][node.key] = j.value("options", std::vector<std::string>{});
@@ -95,7 +100,16 @@ namespace
                         continue;
                     node.key = joinKey(_prefix, node.name);
                     node.isArray = j.value("array", false);
-                    node.children = parseNodes(j.value("children", nlohmann::json::array()), node.key, _comp,_out);
+                    node.children = parseNodes(j.value("children", nlohmann::json::array()), node.key, _comp, _out, _proto);
+                    if (node.isArray)
+                    {
+                        // Taille par defaut = elements de l'instance par defaut.
+                        (_proto ? _out.protoDefaults : _out.defaults)[_comp][arrayCountKey(node.key)] =
+                            static_cast<int>(node.children.size());
+                        if (j.contains("element"))
+                            node.element = parseNodes(nlohmann::json::array({j["element"]}), node.key,
+                                                      _comp, _out, true);
+                    }
                     break;
                 }
             }
@@ -126,6 +140,30 @@ namespace
         return out;
     }
 
+    // Cles des tableaux d'un composant ("Pts", "Stats.Items"). On ne descend
+    // pas dans un tableau : tout ce qu'il contient est couvert par sa cle.
+    void collectArrays(const std::vector<LayoutNode> &_nodes, std::vector<std::string> &_out)
+    {
+        for (const LayoutNode &n : _nodes)
+        {
+            if (n.kind != LayoutNode::Kind::Group)
+                continue;
+            if (n.isArray)
+                _out.push_back(n.key);
+            else
+                collectArrays(n.children, _out);
+        }
+    }
+
+    // Tableau qui contient la cle _key ("Pts.3.hp" -> "Pts"), nullptr sinon.
+    const std::string *arrayOf(const std::vector<std::string> &_arrays, const std::string &_key)
+    {
+        for (const std::string &a : _arrays)
+            if (_key.size() > a.size() && _key.compare(0, a.size(), a) == 0 && _key[a.size()] == '.')
+                return &a;
+        return nullptr;
+    }
+
     // Ajoute _project a _base sans ecraser : le standard reste prioritaire.
     void mergeInto(ComponentCatalog &_base, ComponentCatalog _project)
     {
@@ -136,6 +174,7 @@ namespace
         _base.fieldTypes.merge(_project.fieldTypes);
         _base.enumOptions.merge(_project.enumOptions);
         _base.entityFields.merge(_project.entityFields);
+        _base.protoDefaults.merge(_project.protoDefaults);
         _base.layouts.merge(_project.layouts);
     }
 }
@@ -169,10 +208,22 @@ bool syncSceneWithCatalog(SceneInfo &_scene, const ComponentCatalog &_catalog)
                 continue; // inconnu du catalogue (pas encore genere ?) : on garde tout
             const std::map<std::string, FieldValue> &fields = comp->second;
 
+            // Tableaux : leur taille varie, leurs cles ("Pts.#count", "Pts.3",
+            // "Pts.3.hp") ne sont pas toutes dans le catalogue. Un tableau deja
+            // present dans la scene est garde tel quel ; un tableau absent
+            // (composant ancien) recoit les valeurs par defaut du catalogue.
+            std::vector<std::string> arrays;
+            if (auto lay = _catalog.layouts.find(ci.name); lay != _catalog.layouts.end())
+                collectArrays(lay->second, arrays);
+            std::vector<std::string> missingArrays;
+            for (const std::string &a : arrays)
+                if (!ci.values.count(arrayCountKey(a)))
+                    missingArrays.push_back(a);
+
             // Champs disparus.
             for (auto it = ci.values.begin(); it != ci.values.end();)
             {
-                if (fields.count(it->first))
+                if (fields.count(it->first) || arrayOf(arrays, it->first))
                     ++it;
                 else
                 {
@@ -183,6 +234,9 @@ bool syncSceneWithCatalog(SceneInfo &_scene, const ComponentCatalog &_catalog)
 
             for (const auto &[name, def] : fields)
             {
+                if (const std::string *a = arrayOf(arrays, name);
+                    a && std::find(missingArrays.begin(), missingArrays.end(), *a) == missingArrays.end())
+                    continue; // tableau deja dans la scene : sa taille fait foi
                 auto it = ci.values.find(name);
                 if (it == ci.values.end()) // nouveau champ
                 {
