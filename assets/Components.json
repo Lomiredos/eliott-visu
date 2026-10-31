@@ -1,306 +1,412 @@
 {
-    "components": [
+  "components": [
+    {
+      "fields": [
         {
-            "name": "TransformComponent",
-            "fields": [
-                {
-                    "name": "PositionX",
-                    "type": "float"
-                },
-                {
-                    "name": "PositionY",
-                    "type": "float"
-                },
-                {
-                    "name": "PositionZ",
-                    "type": "float"
-                },
-                {
-                    "name": "EuleurX",
-                    "type": "float"
-                },
-                {
-                    "name": "EuleurY",
-                    "type": "float"
-                },
-                {
-                    "name": "EuleurZ",
-                    "type": "float"
-                },
-                {
-                    "name": "ScaleX",
-                    "type": "float",
-                    "default": 1.0
-                },
-                {
-                    "name": "ScaleY",
-                    "type": "float",
-                    "default": 1.0
-                },
-                {
-                    "name": "ScaleZ",
-                    "type": "float",
-                    "default": 1.0
-                },
-                {
-                    "name": "Parent",
-                    "type": "entity",
-                    "requires": "TransformComponent",
-                    "default": -1
-                }
-            ]
+          "children": [
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "Position"
         },
         {
-            "name": "RigideBodyComponent",
-            "fields": [
-                {
-                    "name": "VelocityX",
-                    "type": "float"
-                },
-                {
-                    "name": "VelocityY",
-                    "type": "float"
-                },
-                {
-                    "name": "VelocityZ",
-                    "type": "float"
-                },
-                {
-                    "name": "isStatic",
-                    "type": "bool",
-                    "default": false
-                }
-            ]
+          "children": [
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "Euler"
         },
         {
-            "name": "SphereComponent",
-            "fields": [
-                {
-                    "name": "radius",
-                    "type": "float",
-                    "default": 1.0
-                }
-            ]
+          "children": [
+            {
+              "default": 1.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 1.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 1.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "Scale"
         },
         {
-            "name": "RectComponent",
-            "fields": [
-                {
-                    "name": "sizeX",
-                    "type": "float",
-                    "default": 1.0
-                },
-                {
-                    "name": "sizeY",
-                    "type": "float",
-                    "default": 1.0
-                },
-                {
-                    "name": "sizeZ",
-                    "type": "float",
-                    "default": 1.0
-                }
-            ]
-        },
-        {
-            "name": "CapsuleComponent",
-            "fields": [
-                {
-                    "name": "radius",
-                    "type": "float",
-                    "default": 0.5
-                },
-                {
-                    "name": "height",
-                    "type": "float",
-                    "default": 1.0
-                }
-            ]
-        },
-        {
-            "name": "MeshComponent",
-            "fields": [
-                {
-                    "name": "path",
-                    "type": "string",
-                    "default": ""
-                }
-            ]
-        },
-        {
-            "name": "ColliderComponent",
-            "fields": [
-                {
-                    "name": "Shape",
-                    "type": "enum",
-                    "default": "Sphere",
-                    "options": [
-                        "Sphere",
-                        "Box",
-                        "Capsule"
-                    ]
-                },
-                {
-                    "name": "OffSetX",
-                    "type": "float",
-                    "default": 0.0
-                },
-                {
-                    "name": "OffSetY",
-                    "type": "float",
-                    "default": 0.0
-                },
-                {
-                    "name": "OffSetZ",
-                    "type": "float",
-                    "default": 0.0
-                },
-                {
-                    "name": "EulerX",
-                    "type": "float",
-                    "default": 0.0
-                },
-                {
-                    "name": "EulerY",
-                    "type": "float",
-                    "default": 0.0
-                },
-                {
-                    "name": "EulerZ",
-                    "type": "float",
-                    "default": 0.0
-                },
-                {
-                    "name": "IsActive",
-                    "type": "bool",
-                    "default": true
-                },
-                {
-                    "name": "IsTrigger",
-                    "type": "bool",
-                    "default": false
-                },
-                {
-                    "name": "radius",
-                    "type": "float",
-                    "default": 1.0
-                },
-                {
-                    "name": "HalfExtentsX",
-                    "type": "float",
-                    "default": 0.5
-                },
-                {
-                    "name": "HalfExtentsY",
-                    "type": "float",
-                    "default": 0.5
-                },
-                {
-                    "name": "HalfExtentsZ",
-                    "type": "float",
-                    "default": 0.5
-                },
-                {
-                    "name": "Height",
-                    "type": "float",
-                    "default": 2.0
-                }
-            ]
-        },
-        {
-            "name": "CameraComponent",
-            "fields": [
-                {
-                    "name": "fov",
-                    "type": "float",
-                    "default": 45.0
-                },
-                {
-                    "name": "nearZ",
-                    "type": "float",
-                    "default": 0.1
-                },
-                {
-                    "name": "farZ",
-                    "type": "float",
-                    "default": 200.0
-                },
-                {
-                    "name": "isMain",
-                    "type": "bool",
-                    "default": true
-                }
-            ]
-        },
-        {
-            "fields": [
-                {
-                    "default": "",
-                    "name": "path",
-                    "type": "string"
-                }
-            ],
-            "name": "MaterialComponent"
-        },
-        {
-            "fields": [
-                {
-                    "default": "#ffffff",
-                    "name": "color",
-                    "type": "color"
-                },
-                {
-                    "default": 2.5,
-                    "name": "intensity",
-                    "type": "float"
-                },
-                {
-                    "default": true,
-                    "name": "shadows",
-                    "type": "bool"
-                }
-            ],
-            "name": "DirectionalLightComponent"
-        },
-        {
-            "fields": [
-                {
-                    "default": "#ffffff",
-                    "name": "color",
-                    "type": "color"
-                },
-                {
-                    "default": 5.0,
-                    "name": "intensity",
-                    "type": "float"
-                },
-                {
-                    "default": 10.0,
-                    "name": "range",
-                    "type": "float"
-                },
-                {
-                    "default": true,
-                    "name": "shadows",
-                    "type": "bool"
-                }
-            ],
-            "name": "PointLightComponent"
-        },
-        {
-            "fields": [
-                {
-                    "default": "#ffffff",
-                    "name": "color",
-                    "type": "color"
-                },
-                {
-                    "default": 0.25,
-                    "name": "intensity",
-                    "type": "float"
-                }
-            ],
-            "name": "AmbientLightComponent"
+          "default": -1,
+          "kind": "field",
+          "name": "Parent",
+          "requires": "TransformComponent",
+          "type": "entity"
         }
-    ]
+      ],
+      "name": "TransformComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": 1.0,
+          "kind": "field",
+          "name": "Radius",
+          "type": "float"
+        }
+      ],
+      "name": "SphereComponent"
+    },
+    {
+      "fields": [
+        {
+          "children": [
+            {
+              "default": 1.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 1.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 1.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "Size"
+        }
+      ],
+      "name": "RectComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": 0.5,
+          "kind": "field",
+          "name": "Radius",
+          "type": "float"
+        },
+        {
+          "default": 1.0,
+          "kind": "field",
+          "name": "Height",
+          "type": "float"
+        }
+      ],
+      "name": "CapsuleComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "",
+          "kind": "field",
+          "name": "Path",
+          "type": "string"
+        }
+      ],
+      "name": "MeshComponent"
+    },
+    {
+      "fields": [
+        {
+          "children": [
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "Velocity"
+        },
+        {
+          "default": false,
+          "kind": "field",
+          "name": "IsStatic",
+          "type": "bool"
+        }
+      ],
+      "name": "RigidBodyComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "Sphere",
+          "kind": "field",
+          "name": "Shape",
+          "options": [
+            "Sphere",
+            "Box",
+            "Capsule"
+          ],
+          "type": "enum"
+        },
+        {
+          "children": [
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "OffSet"
+        },
+        {
+          "children": [
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 0.0,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "Euler"
+        },
+        {
+          "default": true,
+          "kind": "field",
+          "name": "IsActive",
+          "type": "bool"
+        },
+        {
+          "default": false,
+          "kind": "field",
+          "name": "IsTrigger",
+          "type": "bool"
+        },
+        {
+          "default": 1.0,
+          "kind": "field",
+          "name": "Radius",
+          "type": "float"
+        },
+        {
+          "children": [
+            {
+              "default": 0.5,
+              "kind": "field",
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "default": 0.5,
+              "kind": "field",
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "default": 0.5,
+              "kind": "field",
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "kind": "group",
+          "name": "HalfExtents"
+        },
+        {
+          "default": 2.0,
+          "kind": "field",
+          "name": "Height",
+          "type": "float"
+        }
+      ],
+      "name": "ColliderComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": 45.0,
+          "kind": "field",
+          "name": "Fov",
+          "type": "float"
+        },
+        {
+          "default": 0.10000000149011612,
+          "kind": "field",
+          "name": "NearZ",
+          "type": "float"
+        },
+        {
+          "default": 200.0,
+          "kind": "field",
+          "name": "FarZ",
+          "type": "float"
+        },
+        {
+          "default": true,
+          "kind": "field",
+          "name": "IsMain",
+          "type": "bool"
+        }
+      ],
+      "name": "CameraComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "",
+          "kind": "field",
+          "name": "Path",
+          "type": "string"
+        }
+      ],
+      "name": "MaterialComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "#ffffff",
+          "kind": "field",
+          "name": "Color",
+          "type": "color"
+        },
+        {
+          "default": 2.5,
+          "kind": "field",
+          "name": "Intensity",
+          "type": "float"
+        },
+        {
+          "default": true,
+          "kind": "field",
+          "name": "Shadows",
+          "type": "bool"
+        }
+      ],
+      "name": "DirectionalLightComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "#ffffff",
+          "kind": "field",
+          "name": "Color",
+          "type": "color"
+        },
+        {
+          "default": 5.0,
+          "kind": "field",
+          "name": "Intensity",
+          "type": "float"
+        },
+        {
+          "default": 10.0,
+          "kind": "field",
+          "name": "Range",
+          "type": "float"
+        },
+        {
+          "default": true,
+          "kind": "field",
+          "name": "Shadows",
+          "type": "bool"
+        }
+      ],
+      "name": "PointLightComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "#ffffff",
+          "kind": "field",
+          "name": "Color",
+          "type": "color"
+        },
+        {
+          "default": 0.25,
+          "kind": "field",
+          "name": "Intensity",
+          "type": "float"
+        }
+      ],
+      "name": "AmbientLightComponent"
+    }
+  ]
 }
