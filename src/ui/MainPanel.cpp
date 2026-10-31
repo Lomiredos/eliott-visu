@@ -529,14 +529,12 @@ struct FieldCtx
     MainPanel::PlayState *play; // non nul pendant le Play
 };
 
-// Un champ de l'inspecteur : _key = cle complete ("Position.x", sert a l'ID
-// ImGui et a l'envoi au jeu), _label = texte affiche ("x"). _lookup = cle a
-// chercher dans le catalogue si differente : un element de tableau
-// ("Pts.3.Mode") est decrit par son prototype ("Pts.element.Mode").
+// Un champ de l'inspecteur : _key = cle complete ("Position.x", sert aux
+// recherches catalogue, a l'ID ImGui et a l'envoi au jeu), _label = texte
+// affiche ("x").
 static void drawField(FieldCtx &_ctx, const std::string &_key, const char *_label,
-                      FieldValue &_value, const std::string *_lookup = nullptr)
+                      FieldValue &_value)
 {
-    const std::string &lookup = _lookup ? *_lookup : _key;
     // Le parent se change dans la hierarchie (garde la place dans le
     // monde) ; un depot ici deplacerait l'entite.
     if (_ctx.ci.name == "TransformComponent" && _key == "Parent")
@@ -544,9 +542,9 @@ static void drawField(FieldCtx &_ctx, const std::string &_key, const char *_labe
 
     ImGui::PushID(_key.c_str());
     bool edited = false;
-    const std::string *refRequired = _ctx.catalog.requiredComponent(_ctx.ci.name, lookup);
-    const bool isColor = _ctx.catalog.isColor(_ctx.ci.name, lookup);
-    const std::vector<std::string> *assetExts = assetFieldExtensions(_ctx.ci.name, lookup);
+    const std::string *refRequired = _ctx.catalog.requiredComponent(_ctx.ci.name, _key);
+    const bool isColor = _ctx.catalog.isColor(_ctx.ci.name, _key);
+    const std::vector<std::string> *assetExts = assetFieldExtensions(_ctx.ci.name, _key);
 
     if (refRequired)
     {
@@ -571,7 +569,7 @@ static void drawField(FieldCtx &_ctx, const std::string &_key, const char *_labe
         edited = ImGui::Checkbox(_label, p);
     else if (auto p = std::get_if<std::string>(&_value))
     {
-        const std::vector<std::string> *opts = _ctx.catalog.enumValues(_ctx.ci.name, lookup);
+        const std::vector<std::string> *opts = _ctx.catalog.enumValues(_ctx.ci.name, _key);
         if (opts && !opts->empty())
         {
             if (ImGui::BeginCombo(_label, p->c_str()))
@@ -616,158 +614,29 @@ static void drawField(FieldCtx &_ctx, const std::string &_key, const char *_labe
     ImGui::PopID();
 }
 
-static void drawNodes(const std::vector<LayoutNode> &_nodes, FieldCtx &_ctx,
-                      const std::string &_protoPrefix = {}, const std::string &_realPrefix = {});
+static void drawNodes(const std::vector<LayoutNode> &_nodes, FieldCtx &_ctx){
 
-// Signale une modification faite hors d'un widget (taille d'un tableau) :
-// envoyee au jeu pendant le Play (et protegee des snapshots), sinon la scene
-// est marquee modifiee.
-static void notifyEdited(FieldCtx &_ctx, const std::string &_key)
-{
-    const FieldValue &v = _ctx.ci.values[_key];
-    if (_ctx.play)
-    {
-        _ctx.app.game().sendSetField(_ctx.selected, _ctx.ci.name, _key, v);
-        _ctx.play->editEntity = _ctx.selected;
-        _ctx.play->editComp = _ctx.ci.name;
-        _ctx.play->editField = _key;
-        _ctx.play->editValue = v;
-        _ctx.play->editTime = ImGui::GetTime();
-    }
-    else
-        _ctx.app.markSceneDirty();
-}
-
-// Ajoute un element en fin de tableau (valeurs par defaut du prototype) ou
-// retire le dernier. _protoKey = cle du prototype ("Pts.element"), _key = cle
-// reelle du tableau ("Pts", ou "Items.2.Pts" pour un tableau imbrique).
-static void resizeArray(FieldCtx &_ctx, const std::string &_protoKey, const std::string &_key,
-                        int _count, bool _grow)
-{
-    std::map<std::string, FieldValue> &values = _ctx.ci.values;
-    if (_grow)
-    {
-        const std::string elem = _key + "." + std::to_string(_count);
-        auto proto = _ctx.catalog.protoDefaults.find(_ctx.ci.name);
-        if (proto != _ctx.catalog.protoDefaults.end())
-            for (const auto &[k, def] : proto->second)
-                if (k == _protoKey || (k.size() > _protoKey.size() &&
-                                       k.compare(0, _protoKey.size(), _protoKey) == 0 &&
-                                       k[_protoKey.size()] == '.'))
-                    values[elem + k.substr(_protoKey.size())] = def;
-        values[arrayCountKey(_key)] = _count + 1;
-    }
-    else
-    {
-        const std::string elem = _key + "." + std::to_string(_count - 1);
-        for (auto it = values.begin(); it != values.end();)
-        {
-            const bool inElem = it->first == elem || (it->first.size() > elem.size() &&
-                                                      it->first.compare(0, elem.size(), elem) == 0 &&
-                                                      it->first[elem.size()] == '.');
-            it = inElem ? values.erase(it) : std::next(it);
-        }
-        values[arrayCountKey(_key)] = _count - 1;
-    }
-    notifyEdited(_ctx, arrayCountKey(_key));
-}
-
-// Tableau : "Nom [taille]" + boutons +/-, puis un element par indice, dessine
-// a partir du prototype (les enfants du catalogue ne sont que les elements
-// par defaut, la scene peut en avoir plus ou moins).
-static void drawArray(const LayoutNode &_n, const std::string &_key, FieldCtx &_ctx)
-{
-    const std::string countKey = arrayCountKey(_key);
-    auto cit = _ctx.ci.values.find(countKey);
-    const int count = cit != _ctx.ci.values.end() ? std::max(0, static_cast<int>(asFloat(cit->second))) : 0;
-
-    ImGui::PushID(_key.c_str());
-    ImGui::SetNextItemAllowOverlap();
-    const bool open = ImGui::TreeNodeEx("##array", ImGuiTreeNodeFlags_DefaultOpen, "%s [%d]",
-                                        _n.name.c_str(), count);
-    const bool canEdit = !_n.element.empty();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!canEdit);
-    const bool grow = ImGui::SmallButton("+");
-    ImGui::SameLine();
-    ImGui::BeginDisabled(count == 0);
-    const bool shrink = ImGui::SmallButton("-");
-    ImGui::EndDisabled();
-    ImGui::EndDisabled();
-
-    if (open)
-    {
-        if (!canEdit)
-            ImGui::TextDisabled("(catalogue sans prototype : regenere-le)");
-        else
-        {
-            const LayoutNode &elem = _n.element.front();
-            for (int i = 0; i < count; i++)
-            {
-                const std::string real = _key + "." + std::to_string(i);
-                const std::string label = "[" + std::to_string(i) + "]";
-                if (elem.kind == LayoutNode::Kind::Field)
-                {
-                    auto it = _ctx.ci.values.find(real);
-                    if (it != _ctx.ci.values.end())
-                        drawField(_ctx, real, label.c_str(), it->second, &elem.key);
+    for (const LayoutNode &n : _nodes){
+        switch (n.kind) {
+            case LayoutNode::Kind::Separator: ImGui::Separator(); break;
+            case LayoutNode::Kind::Space:     ImGui::Spacing(); break;
+            case LayoutNode::Kind::Label: ImGui::TextUnformatted(n.text.c_str()); break;
+            case LayoutNode::Kind::Group:{
+                if (ImGui::TreeNodeEx(n.key.c_str(), ImGuiTreeNodeFlags_DefaultOpen, "%s", n.name.c_str())){
+                    drawNodes(n.children, _ctx);
+                    ImGui::TreePop();
                 }
-                else if (elem.kind == LayoutNode::Kind::Group)
-                {
-                    if (ImGui::TreeNodeEx(real.c_str(), ImGuiTreeNodeFlags_DefaultOpen, "%s", label.c_str()))
-                    {
-                        drawNodes(elem.children, _ctx, elem.key, real);
-                        ImGui::TreePop();
-                    }
-                }
+                break;
             }
-        }
-        ImGui::TreePop();
-    }
-    ImGui::PopID();
-
-    // Apres le dessin : on ne change pas les valeurs pendant qu'on les parcourt.
-    if (grow)
-        resizeArray(_ctx, _n.element.front().key, _key, count, true);
-    else if (shrink && count > 0)
-        resizeArray(_ctx, _n.element.front().key, _key, count, false);
-}
-
-// _protoPrefix / _realPrefix : on dessine l'interieur d'un element de
-// tableau ; les cles du catalogue ("Items.element.Hp") sont traduites en cles
-// de scene ("Items.2.Hp"). Vides en dehors des tableaux.
-static void drawNodes(const std::vector<LayoutNode> &_nodes, FieldCtx &_ctx,
-                      const std::string &_protoPrefix, const std::string &_realPrefix)
-{
-    for (const LayoutNode &n : _nodes)
-    {
-        const std::string key =
-            _protoPrefix.empty() ? n.key : _realPrefix + n.key.substr(_protoPrefix.size());
-        switch (n.kind)
-        {
-        case LayoutNode::Kind::Separator: ImGui::Separator(); break;
-        case LayoutNode::Kind::Space:     ImGui::Spacing(); break;
-        case LayoutNode::Kind::Label:     ImGui::TextUnformatted(n.text.c_str()); break;
-        case LayoutNode::Kind::Group:
-        {
-            if (n.isArray)
-                drawArray(n, key, _ctx);
-            else if (ImGui::TreeNodeEx(key.c_str(), ImGuiTreeNodeFlags_DefaultOpen, "%s", n.name.c_str()))
+            case LayoutNode::Kind::Field:
             {
-                drawNodes(n.children, _ctx, _protoPrefix, _realPrefix);
-                ImGui::TreePop();
+                auto it = _ctx.ci.values.find(n.key);
+                if (it != _ctx.ci.values.end())
+                    drawField(_ctx, n.key, n.name.c_str(), it->second);
+                else
+                    ImGui::TextDisabled("%s (absent de la scene)", n.name.c_str());
+                break;
             }
-            break;
-        }
-        case LayoutNode::Kind::Field:
-        {
-            auto it = _ctx.ci.values.find(key);
-            if (it != _ctx.ci.values.end())
-                drawField(_ctx, key, n.name.c_str(), it->second, &n.key);
-            else
-                ImGui::TextDisabled("%s (absent de la scene)", n.name.c_str());
-            break;
-        }
         }
     }
 }
