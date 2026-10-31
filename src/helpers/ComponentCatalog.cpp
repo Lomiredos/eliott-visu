@@ -102,6 +102,54 @@ bool ComponentCatalog::isColor(const std::string &_comp, const std::string &_fie
     return type && *type == "color";
 }
 
+bool syncSceneWithCatalog(SceneInfo &_scene, const ComponentCatalog &_catalog)
+{
+    bool changed = false;
+    for (EntityInfo &ent : _scene.entities)
+        for (ComponentInstance &ci : ent.components)
+        {
+            auto comp = _catalog.defaults.find(ci.name);
+            if (comp == _catalog.defaults.end())
+                continue; // inconnu du catalogue (pas encore genere ?) : on garde tout
+            const std::map<std::string, FieldValue> &fields = comp->second;
+
+            // Champs disparus.
+            for (auto it = ci.values.begin(); it != ci.values.end();)
+            {
+                if (fields.count(it->first))
+                    ++it;
+                else
+                {
+                    it = ci.values.erase(it);
+                    changed = true;
+                }
+            }
+
+            for (const auto &[name, def] : fields)
+            {
+                auto it = ci.values.find(name);
+                if (it == ci.values.end()) // nouveau champ
+                {
+                    ci.values.emplace(name, def);
+                    changed = true;
+                    continue;
+                }
+                FieldValue &v = it->second;
+                if (v.index() == def.index())
+                    continue;
+                // Type change : on garde la valeur si c'est juste int <-> float.
+                if (std::holds_alternative<float>(def) && std::holds_alternative<int>(v))
+                    v = static_cast<float>(std::get<int>(v));
+                else if (std::holds_alternative<int>(def) && std::holds_alternative<float>(v))
+                    v = static_cast<int>(std::get<float>(v));
+                else
+                    v = def;
+                changed = true;
+            }
+        }
+    return changed;
+}
+
 const ComponentCatalog &componentCatalog(const fs::path &_projectCatalog)
 {
     // Standard : integre au binaire, ne change jamais.

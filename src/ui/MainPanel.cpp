@@ -298,8 +298,22 @@ static void drawEntityNode(const SceneInfo &_scene, const std::vector<std::vecto
         flags |= ImGuiTreeNodeFlags_Selected;
 
     bool open = ImGui::TreeNodeEx((display + "##ent" + std::to_string(_i)).c_str(), flags);
+    // Selection au relachement, pas a l'appui : un appui suivi d'un glisser
+    // (vers un parent ou un champ entity de l'inspecteur) ne doit pas changer
+    // l'entite inspectee. Il faut avoir appuye sur CE noeud (pas sur la
+    // fleche), relache dessus, sans depasser le seuil de glisser.
+    static int s_pressed = -1;
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-        _selected = _i;
+        s_pressed = _i;
+    if (ImGui::IsItemDeactivated())
+    {
+        const ImGuiIO &io = ImGui::GetIO();
+        const float th = io.MouseDragThreshold;
+        if (s_pressed == _i && ImGui::IsItemHovered() &&
+            io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] < th * th)
+            _selected = _i;
+        s_pressed = -1;
+    }
 
     // Glisser l'entite : sur une autre entite (parent) ou sur un champ
     // "entity" de l'inspecteur.

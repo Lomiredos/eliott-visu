@@ -79,6 +79,9 @@ public:
     // lui, est nettoye par componentgen::deleteComponent). L'historique
     // repart de zero : un undo ne doit pas ressusciter le composant.
     void purgeComponent(const std::string &_name);
+    // Met les champs des entites de la scene ouverte a jour avec le catalogue
+    // (apres sa generation, et au chargement d'une scene). Modifiable par undo.
+    void syncSceneWithCatalog();
 
     GameProcess &game() { return m_game; }
     // Play ou build en cours : pas de suppression de fichiers du projet.

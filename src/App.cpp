@@ -325,11 +325,21 @@ void App::loadSceneData(const std::string &_sceneName)
     m_sceneLoaded = true;
     m_sceneDirty = false;
     m_history.reset(m_scene);
+    // Le catalogue a pu changer depuis la derniere sauvegarde de cette scene.
+    syncSceneWithCatalog();
 }
 
 bool App::isBusy() const
 {
     return m_game.running() || projectbuild::AsyncBuild::anyRunning();
+}
+
+void App::syncSceneWithCatalog()
+{
+    if (!m_project || !m_project->isValid() || m_game.running())
+        return;
+    if (::syncSceneWithCatalog(m_scene, componentCatalog(m_project->componentsCatalog())))
+        markSceneDirty();
 }
 
 void App::purgeComponent(const std::string &_name)

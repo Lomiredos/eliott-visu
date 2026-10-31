@@ -76,6 +76,9 @@ void ComponentPanel::updateCatalog(Project *_project, bool _visible)
     if (r.ok)
     {
         m_status = "Catalogue genere.";
+        // Nouveaux champs / champs retires : visibles tout de suite sur les
+        // entites de la scene ouverte.
+        App::getInstance().syncSceneWithCatalog();
         return;
     }
     m_status = "Echec de la compilation.";

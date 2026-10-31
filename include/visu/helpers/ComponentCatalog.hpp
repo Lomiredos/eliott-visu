@@ -39,3 +39,9 @@ struct ComponentCatalog
 // relu seulement quand le fichier change : appelable a chaque frame. La
 // reference reste valide jusqu'au prochain appel qui recharge.
 const ComponentCatalog &componentCatalog(const std::filesystem::path &_projectCatalog);
+
+// Aligne les champs des composants de la scene sur le catalogue : champ
+// nouveau -> ajoute avec sa valeur par defaut, champ disparu -> retire, type
+// change -> converti (int <-> float) sinon remis par defaut. Les composants
+// absents du catalogue ne sont pas touches. Vrai si la scene a change.
+bool syncSceneWithCatalog(SceneInfo &_scene, const ComponentCatalog &_catalog);
