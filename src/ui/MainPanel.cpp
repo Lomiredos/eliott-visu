@@ -517,6 +517,130 @@ static void drawHierarchy(App &_app, Project *_project, MainPanel::DeletionState
     }
 }
 
+// Ce dont un champ a besoin pour se dessiner et signaler une modification.
+struct FieldCtx
+{
+    App &app;
+    Project *project;
+    const ComponentCatalog &catalog;
+    SceneInfo &scene;
+    ComponentInstance &ci;
+    int selected;
+    MainPanel::PlayState *play; // non nul pendant le Play
+};
+
+// Un champ de l'inspecteur : _key = cle complete ("Position.x", sert aux
+// recherches catalogue, a l'ID ImGui et a l'envoi au jeu), _label = texte
+// affiche ("x").
+static void drawField(FieldCtx &_ctx, const std::string &_key, const char *_label,
+                      FieldValue &_value)
+{
+    // Le parent se change dans la hierarchie (garde la place dans le
+    // monde) ; un depot ici deplacerait l'entite.
+    if (_ctx.ci.name == "TransformComponent" && _key == "Parent")
+        return;
+
+    ImGui::PushID(_key.c_str());
+    bool edited = false;
+    const std::string *refRequired = _ctx.catalog.requiredComponent(_ctx.ci.name, _key);
+    const bool isColor = _ctx.catalog.isColor(_ctx.ci.name, _key);
+    const std::vector<std::string> *assetExts = assetFieldExtensions(_ctx.ci.name, _key);
+
+    if (refRequired)
+    {
+        if (!std::holds_alternative<int>(_value)) // ancienne valeur
+            _value = static_cast<int>(asFloat(_value, -1.0f));
+        edited = entityRefField(_ctx.app, _label, std::get<int>(_value), *refRequired, _ctx.scene);
+    }
+    else if (isColor && std::holds_alternative<std::string>(_value))
+    {
+        edited = colorField(_label, std::get<std::string>(_value));
+    }
+    else if (assetExts && std::holds_alternative<std::string>(_value))
+    {
+        edited = assetField(_label, std::get<std::string>(_value), *assetExts,
+                            _ctx.project->root());
+    }
+    else if (auto p = std::get_if<float>(&_value))
+        edited = ImGui::DragFloat(_label, p, 0.05f);
+    else if (auto p = std::get_if<int>(&_value))
+        edited = ImGui::DragInt(_label, p);
+    else if (auto p = std::get_if<bool>(&_value))
+        edited = ImGui::Checkbox(_label, p);
+    else if (auto p = std::get_if<std::string>(&_value))
+    {
+        const std::vector<std::string> *opts = _ctx.catalog.enumValues(_ctx.ci.name, _key);
+        if (opts && !opts->empty())
+        {
+            if (ImGui::BeginCombo(_label, p->c_str()))
+            {
+                for (const std::string &opt : *opts)
+                {
+                    bool isSelected = (*p == opt);
+                    if (ImGui::Selectable(opt.c_str(), isSelected))
+                    {
+                        *p = opt;
+                        edited = true;
+                    }
+                    if (isSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+        }
+        else
+        {
+            edited = ImGui::InputText(_label, p);
+        }
+    }
+
+    if (_ctx.play)
+    {
+        // Envoye au jeu ; tant qu'on manipule le champ, il est protege
+        // des snapshots (voir syncPlayView).
+        if (edited)
+            _ctx.app.game().sendSetField(_ctx.selected, _ctx.ci.name, _key, _value);
+        if (edited || ImGui::IsItemActive())
+        {
+            _ctx.play->editEntity = _ctx.selected;
+            _ctx.play->editComp = _ctx.ci.name;
+            _ctx.play->editField = _key;
+            _ctx.play->editValue = _value;
+            _ctx.play->editTime = ImGui::GetTime();
+        }
+    }
+    else if (edited)
+        _ctx.app.markSceneDirty();
+    ImGui::PopID();
+}
+
+static void drawNodes(const std::vector<LayoutNode> &_nodes, FieldCtx &_ctx){
+
+    for (const LayoutNode &n : _nodes){
+        switch (n.kind) {
+            case LayoutNode::Kind::Separator: ImGui::Separator(); break;
+            case LayoutNode::Kind::Space:     ImGui::Spacing(); break;
+            case LayoutNode::Kind::Label: ImGui::TextUnformatted(n.text.c_str()); break;
+            case LayoutNode::Kind::Group:{
+                if (ImGui::TreeNodeEx(n.key.c_str(), ImGuiTreeNodeFlags_DefaultOpen, "%s", n.name.c_str())){
+                    drawNodes(n.children, _ctx);
+                    ImGui::TreePop();
+                }
+                break;
+            }
+            case LayoutNode::Kind::Field:
+            {
+                auto it = _ctx.ci.values.find(n.key);
+                if (it != _ctx.ci.values.end())
+                    drawField(_ctx, n.key, n.name.c_str(), it->second);
+                else
+                    ImGui::TextDisabled("%s (absent de la scene)", n.name.c_str());
+                break;
+            }
+        }
+    }
+}
+
 // _play non nul pendant le Play : les champs modifies sont envoyes au jeu
 // (pas a la scene), et la structure (composants, nom) est en lecture seule.
 static void drawInspector(App &_app, Project *_project, MainPanel::DeletionState &_del,
@@ -582,88 +706,23 @@ static void drawInspector(App &_app, Project *_project, MainPanel::DeletionState
 
         if (open)
         {
-            if (ci.values.empty())
-                ImGui::TextDisabled("(aucun champ)");
-            for (auto &kv : ci.values)
+            FieldCtx ctx{_app, _project, catalog, _scene, ci, selected, _play};
+            auto layout = catalog.layouts.find(ci.name);
+            if (layout != catalog.layouts.end())
             {
-
-                // Le parent se change dans la hierarchie (garde la place dans le
-                // monde) ; un depot ici deplacerait l'entite.
-                if (ci.name == "TransformComponent" && kv.first == "Parent")
-                    continue;
-
-                const char *lbl = kv.first.c_str();
-                bool edited = false;
-                const std::string *refRequired = catalog.requiredComponent(ci.name, kv.first);
-                const bool isColor = catalog.isColor(ci.name, kv.first);
-                const std::vector<std::string> *assetExts = assetFieldExtensions(ci.name, kv.first);
-
-                if (refRequired)
-                {
-                    if (!std::holds_alternative<int>(kv.second)) // ancienne valeur
-                        kv.second = static_cast<int>(asFloat(kv.second, -1.0f));
-                    edited =
-                        entityRefField(_app, lbl, std::get<int>(kv.second), *refRequired, _scene);
-                }
-                else if (isColor && std::holds_alternative<std::string>(kv.second))
-                {
-                    edited = colorField(lbl, std::get<std::string>(kv.second));
-                }
-                else if (assetExts && std::holds_alternative<std::string>(kv.second))
-                {
-                    edited = assetField(lbl, std::get<std::string>(kv.second), *assetExts,
-                                        _project->root());
-                }
-                else if (auto p = std::get_if<float>(&kv.second))
-                    edited = ImGui::DragFloat(lbl, p, 0.05f);
-                else if (auto p = std::get_if<int>(&kv.second))
-                    edited = ImGui::DragInt(lbl, p);
-                else if (auto p = std::get_if<bool>(&kv.second))
-                    edited = ImGui::Checkbox(lbl, p);
-                else if (auto p = std::get_if<std::string>(&kv.second))
-                {
-                    const std::vector<std::string> *opts = catalog.enumValues(ci.name, kv.first);
-                    if (opts && !opts->empty())
-                    {
-                        if (ImGui::BeginCombo(lbl, p->c_str()))
-                        {
-                            for (const std::string &opt : *opts)
-                            {
-                                bool isSelected = (*p == opt);
-                                if (ImGui::Selectable(opt.c_str(), isSelected))
-                                {
-                                    *p = opt;
-                                    edited = true;
-                                }
-                                if (isSelected)
-                                    ImGui::SetItemDefaultFocus();
-                            }
-                            ImGui::EndCombo();
-                        }
-                    }
-                    else
-                    {
-                        edited = ImGui::InputText(lbl, p);
-                    }
-                }
-                if (playing)
-                {
-                    // Envoye au jeu ; tant qu'on manipule le champ, il est protege
-                    // des snapshots (voir syncPlayView).
-                    if (edited)
-                        _app.game().sendSetField(selected, ci.name, kv.first, kv.second);
-                    if (edited || ImGui::IsItemActive())
-                    {
-                        _play->editEntity = selected;
-                        _play->editComp = ci.name;
-                        _play->editField = kv.first;
-                        _play->editValue = kv.second;
-                        _play->editTime = ImGui::GetTime();
-                    }
-                }
-                else if (edited)
-                    _app.markSceneDirty();
+                if (layout->second.empty())
+                    ImGui::TextDisabled("(aucun champ)");
+                drawNodes(layout->second, ctx);
             }
+            else
+            {
+                if(ci.values.empty())
+                    ImGui::TextDisabled("(aucun champ)");
+            
+                for (auto &kv : ci.values)
+                drawField(ctx, kv.first, kv.first.c_str(), kv.second);
+            }
+
         }
 
         ImGui::PopID();
