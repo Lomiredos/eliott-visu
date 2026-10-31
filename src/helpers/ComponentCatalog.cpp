@@ -37,6 +37,76 @@ namespace
         return _field.value("default", 0.0f);
     }
 
+    LayoutNode::Kind parseKind(const nlohmann::json &_node){
+        const std::string k = _node.value("kind", std::string("field"));
+        if (k == "group")     return LayoutNode::Kind::Group;
+        if (k == "separator") return LayoutNode::Kind::Separator;
+        if (k == "space")     return LayoutNode::Kind::Space;
+        if (k == "label")     return LayoutNode::Kind::Label;
+        return LayoutNode::Kind::Field; // les ancien format on pas de kind, et c'est des field;
+    }
+
+    std::string joinKey(const std::string &_prefix, const std::string &_name)
+    {
+        return _prefix.empty() ? _name : _prefix + "." + _name;
+    }
+
+    std::vector<LayoutNode> parseNodes(const nlohmann::json &_nodes, const std::string &_prefix,
+                                       const std::string &_comp, ComponentCatalog &_out)
+    {
+        std::vector<LayoutNode> result;
+        if (_nodes.is_array() == false)
+            return result; // pas de "children" ou pas fermer ect...
+
+        for (const nlohmann::json &j : _nodes)
+        {
+            LayoutNode node;
+            node.kind = parseKind(j);
+
+            switch (node.kind) 
+            {
+                case LayoutNode::Kind::Separator:
+                case LayoutNode::Kind::Space:
+                    break;
+                
+                case LayoutNode::Kind::Label:
+                    node.text = j.value("text", std::string{});
+                    break;
+                case LayoutNode::Kind::Field:
+                {
+                    node.name = j.value("name", std::string{});
+                    if (node.name.empty())
+                        continue; // nom invalide;
+                    node.key = joinKey(_prefix, node.name);
+                    
+                    std::string type = j.value("type", "float");
+                    _out.defaults[_comp][node.key] = defaultValue(j, type);
+                    _out.fieldTypes[_comp][node.key] = type;
+                    if (type == "enum")
+                        _out.enumOptions[_comp][node.key] = j.value("options", std::vector<std::string>{});
+                    else if (type == "entity")
+                        _out.entityFields[_comp][node.key] = j.value("requires", std::string{});
+                    break;
+                }
+                case LayoutNode::Kind::Group:
+                {
+                    node.name = j.value("name", std::string{});
+                    if (node.name.empty())
+                        continue;
+                    node.key = joinKey(_prefix, node.name);
+                    node.isArray = j.value("array", false);
+                    node.children = parseNodes(j.value("children", nlohmann::json::array()), node.key, _comp,_out);
+                    break;
+                }
+            }
+            result.push_back(std::move(node));
+                
+        }
+        return result;
+    }
+
+    
+
     // Un seul parcours du JSON remplit les quatre tables.
     ComponentCatalog parseCatalog(const std::string &_text)
     {
@@ -50,23 +120,8 @@ namespace
             const std::string cname = comp.value("name", "");
             if (cname.empty())
                 continue;
-            std::map<std::string, FieldValue> &defaults = out.defaults[cname];
-            if (!comp.contains("fields"))
-                continue;
-            for (const nlohmann::json &field : comp["fields"])
-            {
-                const std::string fname = field.value("name", "");
-                if (fname.empty())
-                    continue;
-                const std::string type = field.value("type", std::string("float"));
-                defaults[fname] = defaultValue(field, type);
-                out.fieldTypes[cname][fname] = type;
-                if (type == "enum")
-                    out.enumOptions[cname][fname] =
-                        field.value("options", std::vector<std::string>{});
-                else if (type == "entity")
-                    out.entityFields[cname][fname] = field.value("requires", std::string{});
-            }
+            out.defaults[cname]; // cree l'entrée vide
+            out.layouts[cname] = parseNodes(comp.value("fields", nlohmann::json::array()), "", cname, out);
         }
         return out;
     }
@@ -81,6 +136,7 @@ namespace
         _base.fieldTypes.merge(_project.fieldTypes);
         _base.enumOptions.merge(_project.enumOptions);
         _base.entityFields.merge(_project.entityFields);
+        _base.layouts.merge(_project.layouts);
     }
 }
 
