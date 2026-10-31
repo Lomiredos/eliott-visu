@@ -75,6 +75,9 @@
           "name": "Scale"
         },
         {
+          "kind": "separator"
+        },
+        {
           "default": -1,
           "kind": "field",
           "name": "Parent",
@@ -201,6 +204,21 @@
           "type": "enum"
         },
         {
+          "default": true,
+          "kind": "field",
+          "name": "IsActive",
+          "type": "bool"
+        },
+        {
+          "default": false,
+          "kind": "field",
+          "name": "IsTrigger",
+          "type": "bool"
+        },
+        {
+          "kind": "separator"
+        },
+        {
           "children": [
             {
               "default": 0.0,
@@ -249,16 +267,11 @@
           "name": "Euler"
         },
         {
-          "default": true,
-          "kind": "field",
-          "name": "IsActive",
-          "type": "bool"
+          "kind": "separator"
         },
         {
-          "default": false,
-          "kind": "field",
-          "name": "IsTrigger",
-          "type": "bool"
+          "kind": "label",
+          "text": "Selon la forme"
         },
         {
           "default": 1.0,
@@ -318,6 +331,9 @@
           "kind": "field",
           "name": "FarZ",
           "type": "float"
+        },
+        {
+          "kind": "separator"
         },
         {
           "default": true,

@@ -175,6 +175,10 @@ namespace componentgen
             << "template <>\n"
             << "struct ee::reflection::Reflect<" << name << ">\n{\n"
             << "    static constexpr const char *name = \"" << name << "\";\n\n"
+            << "    // Mise en page dans l'inspecteur (dans l'ordre des visit) :\n"
+            << "    //   _v.separator();  _v.space();  _v.label(\"Titre\");\n"
+            << "    //   { ee::reflection::GroupScope g(_v, \"Groupe\"); _v.visit(...); }\n"
+            << "    // Pas de '.' dans les noms de champs (separateur des cles \"Groupe.champ\").\n"
             << "    static void visit(" << name << " &_c, ee::reflection::FieldVisitor &_v)\n"
             << "    {\n";
         for (const auto &f : fields)
