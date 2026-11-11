@@ -423,6 +423,17 @@
         }
       ],
       "name": "AmbientLightComponent"
+    },
+    {
+      "fields": [
+        {
+          "default": "",
+          "kind": "field",
+          "name": "FSM Path",
+          "type": "string"
+        }
+      ],
+      "name": "StateMachineComponent"
     }
   ]
 }

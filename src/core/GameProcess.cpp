@@ -220,6 +220,7 @@ void GameProcess::update()
             if (ee::ipc::msgType(m) == "snap" && m.contains("scene"))
             {
                 m_snapshot = sceneFromJson(m["scene"]);
+                m_fsmStates = ee::ipc::fsmStatesFromMsg(m);
                 ++m_snapshotVersion;
             }
     }
@@ -455,6 +456,12 @@ void GameProcess::sendInput(const ee::ipc::InputState &_in)
 {
     if (m_state == State::Running)
         m_conn.send(ee::ipc::msgInput(_in));
+}
+
+void GameProcess::sendFsmSet(int _entity, const std::string &_param, const nlohmann::json &_value)
+{
+    if (m_state == State::Running)
+        m_conn.send(ee::ipc::msgFsmSet(_entity, _param, _value));
 }
 
 void GameProcess::sendSetField(int _entity, const std::string &_comp, const std::string &_field,

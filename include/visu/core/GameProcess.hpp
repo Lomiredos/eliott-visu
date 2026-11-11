@@ -48,6 +48,7 @@ public:
 
     const SceneInfo *snapshot() const { return m_snapshot ? &*m_snapshot : nullptr; }
     uint64_t snapshotVersion() const { return m_snapshotVersion; }
+    const std::vector<ee::ipc::FsmLiveState> &fsmStates() const { return m_fsmStates; }
 
     void setPaused(bool _paused);
     bool paused() const { return m_paused; }
@@ -56,6 +57,7 @@ public:
 
     void sendResize(int _w, int _h);
     void sendInput(const ee::ipc::InputState &_in);
+    void sendFsmSet(int _entity, const std::string &_param, const nlohmann::json &_value);
     void sendSetField(int _entity, const std::string &_comp, const std::string &_field,
                       const FieldValue &_value);
 
@@ -89,6 +91,7 @@ private:
 
     std::optional<SceneInfo> m_snapshot;
     uint64_t m_snapshotVersion = 0;
+    std::vector<ee::ipc::FsmLiveState> m_fsmStates;
 
     std::filesystem::path m_logPath;
     std::string m_crashMessage;

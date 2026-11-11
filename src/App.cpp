@@ -12,6 +12,7 @@
 #include "visu/ui/ConfirmModal.hpp"
 #include "visu/ui/MainPanel.hpp"
 #include "visu/ui/MaterialPanel.hpp"
+#include "visu/ui/FsmPanel.hpp"
 #include "visu/ui/EngineSettingsPanel.hpp"
 #include "visu/ui/Modal.hpp"
 #include "visu/ui/EditorCommands.hpp"
@@ -121,6 +122,7 @@ static void buildDefaultLayout(ImGuiID _dockspaceId, const ImVec2 &_size)
     ImGui::DockBuilderDockWindow("System", _dockspaceId);
     ImGui::DockBuilderDockWindow("Component", _dockspaceId);
     ImGui::DockBuilderDockWindow("Materials", _dockspaceId);
+    ImGui::DockBuilderDockWindow("State Machines", _dockspaceId);
     ImGui::DockBuilderDockWindow("Reglages", _dockspaceId);
 
     ImGui::DockBuilderFinish(_dockspaceId);
@@ -286,6 +288,7 @@ bool App::init()
     requestPanel(std::make_unique<ComponentPanel>());
     requestPanel(std::make_unique<MainPanel>());
     requestPanel(std::make_unique<MaterialPanel>());
+    requestPanel(std::make_unique<FsmPanel>());
     requestPanel(std::make_unique<EngineSettingsPanel>());
     flushPanel();
     m_engineUpdate.startCheck();
@@ -581,7 +584,9 @@ void App::updateHistory()
     m_history.commit(m_scene, m_selectedEntity, editing);
 
     // Champ texte actif : Ctrl+Z lui appartient (undo du texte).
-    if (editing || ImGui::GetIO().WantTextInput)
+    const bool claimed = m_undoClaimed;
+    m_undoClaimed = false;
+    if (editing || ImGui::GetIO().WantTextInput || claimed)
         return;
     // Touches par caractere (ImGui suit la disposition du clavier) : Ctrl+Z
     // est la touche marquee Z, en AZERTY comme en QWERTY.

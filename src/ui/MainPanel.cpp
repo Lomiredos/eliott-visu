@@ -1,3 +1,4 @@
+#include "visu/ui/FsmInspector.hpp"
 #include "visu/ui/MainPanel.hpp"
 
 #include "visu/App.hpp"
@@ -161,10 +162,13 @@ static const std::vector<std::string> *assetFieldExtensions(const std::string &_
 {
     static const std::vector<std::string> mat = {".mat"};
     static const std::vector<std::string> obj = {".obj"};
+    static const std::vector<std::string> fsm = {".fsm"};
     if (_comp == "MaterialComponent" && _field == "Path")
         return &mat;
     if (_comp == "MeshComponent" && _field == "Path")
         return &obj;
+    if (_comp == "StateMachineComponent" && _field == "FSM Path")
+        return &fsm;
     return nullptr;
 }
 
@@ -721,6 +725,13 @@ static void drawInspector(App &_app, Project *_project, MainPanel::DeletionState
             
                 for (auto &kv : ci.values)
                 drawField(ctx, kv.first, kv.first.c_str(), kv.second);
+            }
+
+            if (ci.name == "StateMachineComponent")
+            {
+                auto path = ci.values.find("FSM Path");
+                const std::string *p = path != ci.values.end() ? std::get_if<std::string>(&path->second) : nullptr;
+                drawStateMachineInspector(_app, _project, p ? *p : std::string(), selected, playing);
             }
 
         }

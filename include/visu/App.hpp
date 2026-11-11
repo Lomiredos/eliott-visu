@@ -30,6 +30,7 @@ private:
 
     SceneInfo m_scene;
     int m_selectedEntity = -1;
+    bool m_undoClaimed = false;
     bool m_sceneLoaded = false;
     bool m_sceneDirty = false;
     SceneHistory m_history; // Ctrl+Z / Ctrl+Y
@@ -98,6 +99,7 @@ public:
     bool canRedo() const;
     void undo();
     void redo();
+    void claimUndoShortcut() { m_undoClaimed = true; }
 
     // Copier / coller l'entite selectionnee (et ses enfants), via le
     // presse-papiers du systeme. Hors Play.
@@ -128,6 +130,13 @@ public:
                 if (!_unlockedOnly || !found->isLocked())
                     return found;
         }
+        return nullptr;
+    }
+    template <typename T> T *findPanel()
+    {
+        for (auto &p : m_panels)
+            if (auto *found = dynamic_cast<T *>(p.get()))
+                return found;
         return nullptr;
     }
     template <typename T> std::vector<T *> getPanels()
