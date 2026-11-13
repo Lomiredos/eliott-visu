@@ -56,22 +56,22 @@ void EngineSettingsPanel::draw(Project *_project)
          "de la camera. Chacune coute un calcul par pixel.");
 
     ImGui::SeparatorText("Ombres du soleil");
-    changed |= ImGui::Checkbox("Activer##sun", &r.sunShadows);
-    ImGui::BeginDisabled(!r.sunShadows);
-    changed |= resolutionCombo("Resolution##sun", r.sunShadowResolution, 512, 8192);
+    changed |= ImGui::Checkbox("Activer##sun", &r.sun.enable);
+    ImGui::BeginDisabled(!r.sun.enable);
+    changed |= resolutionCombo("Resolution##sun", r.sun.resolution, 512, 8192);
     help("Plus haut = ombres plus nettes, plus de memoire video.");
-    changed |= ImGui::DragFloat("Distance", &r.sunShadowDistance, 0.5f, 1.0f, 1000.0f, "%.0f m");
+    changed |= ImGui::DragFloat("Distance", &r.sun.distance, 0.5f, 1.0f, 1000.0f, "%.0f m");
     help("Zone couverte devant la camera. Plus elle est grande, plus les\n"
          "ombres sont floues (meme resolution etalee sur plus de place).");
     ImGui::EndDisabled();
 
     ImGui::SeparatorText("Ombres des lampes");
-    changed |= ImGui::Checkbox("Activer##point", &r.pointShadows);
-    ImGui::BeginDisabled(!r.pointShadows);
-    changed |= ImGui::SliderInt("Lampes ombrees max", &r.maxShadowedPointLights, 0, 16);
+    changed |= ImGui::Checkbox("Activer##point", &r.point.enable);
+    ImGui::BeginDisabled(!r.point.enable);
+    changed |= ImGui::SliderInt("Lampes ombrees max", &r.point.maxLight, 0, 16);
     help("Les plus proches de la camera parmi celles qui ont \"shadows\".\n"
          "Chacune redessine la scene 6 fois : c'est le reglage le plus cher.");
-    changed |= resolutionCombo("Resolution##point", r.pointShadowResolution, 128, 2048);
+    changed |= resolutionCombo("Resolution##point", r.point.resolution, 128, 2048);
     help("Par face du cube (6 faces par lampe).");
     ImGui::EndDisabled();
     ImGui::PopItemWidth();

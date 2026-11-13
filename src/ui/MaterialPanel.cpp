@@ -306,15 +306,15 @@ void MaterialPanel::drawEditor(Project *_project)
                 {
                     float c = ((x + y) & 1) ? 0.85f : 0.25f;
                     m_gl.drawMesh(m_gl.builtin(ee::render::Prim::Cube), {x * 0.5f, y * 0.5f, -1.6f},
-                                  {0.5f, 0.5f, 0.05f}, {0.0f, 0.0f, 0.0f},
-                                  ee::render::Color{c, c, c});
+                                  {0.5f, 0.5f, 0.05f}, ee::math::Quaternion::identity(),
+                                  ee::Color3{c, c, c});
                 }
         if (m_previewShape == 0)
             m_gl.drawMesh(m_gl.builtin(ee::render::Prim::Sphere), {0, 0, 0}, {1, 1, 1},
-                          {0.0f, m_previewYaw * 57.29578f, 0.0f}, mat);
+                          ee::math::Quaternion::fromEulerDeg(0.0f, m_previewYaw * 57.29578f, 0.0f), mat);
         else
             m_gl.drawMesh(m_gl.builtin(ee::render::Prim::Cube), {0, 0, 0}, {1.4f, 1.4f, 1.4f},
-                          {20.0f, m_previewYaw * 57.29578f, 0.0f}, mat);
+                          ee::math::Quaternion::fromEulerDeg(20.0f, m_previewYaw * 57.29578f, 0.0f), mat);
         m_gl.endScene();
         // ImGui::Image n'est pas cliquable : bouton invisible dessous pour le drag.
         ImVec2 p0 = ImGui::GetCursorScreenPos();
