@@ -1155,7 +1155,7 @@ static bool drawGizmo(App &_app, ScenePreview &_preview, const MainPanel::NavSta
     const int parent = parents[sel];
     const ee::scene::Xform &wx = world[sel];
 
-    float vmat[16], pmat[16];
+    ee::math::Matrix<4, float> vmat, pmat;
     _preview.getViewMatrix(vmat);
     _preview.getProjMatrix(pmat);
 
@@ -1180,7 +1180,7 @@ static bool drawGizmo(App &_app, ScenePreview &_preview, const MainPanel::NavSta
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(_imgMin.x, _imgMin.y, static_cast<float>(_pw), static_cast<float>(_ph));
-    ImGuizmo::Manipulate(vmat, pmat, op, ImGuizmo::WORLD, model);
+    ImGuizmo::Manipulate(vmat.data(), pmat.data(), op, ImGuizmo::WORLD, model);
 
     if (ImGuizmo::IsUsing())
     {

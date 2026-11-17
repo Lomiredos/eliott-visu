@@ -9,7 +9,7 @@
 
 namespace
 {
-    ee::math::Vector3<float> forwardFrom(float _yaw, float _pitch)
+    ee::math::Vector<3, float> forwardFrom(float _yaw, float _pitch)
     {
         float cp = std::cos(_pitch), sp = std::sin(_pitch);
         float cy = std::cos(_yaw), sy = std::sin(_yaw);
@@ -21,7 +21,7 @@ void ScenePreview::ensureCamInit()
 {
     if (m_camInit)
         return;
-    ee::math::Vector3<float> d = (-m_camPos).Normalize();
+    ee::math::Vector<3, float> d = (-m_camPos).normalized();
     m_pitch = std::asin(d.y);
     m_yaw = std::atan2(d.z, d.x);
     m_camInit = true;
@@ -79,9 +79,9 @@ void ScenePreview::addYawPitch(float _dYaw, float _dPitch)
 
 void ScenePreview::moveLocal(float _forward, float _right, float _up)
 {
-    ee::math::Vector3<float> f = forwardFrom(m_yaw, m_pitch);
-    ee::math::Vector3<float> wup{0.0f, 1.0f, 0.0f};
-    ee::math::Vector3<float> right = f.Cross(wup).Normalize();
+    ee::math::Vector<3, float> f = forwardFrom(m_yaw, m_pitch);
+    ee::math::Vector<3, float> wup{0.0f, 1.0f, 0.0f};
+    ee::math::Vector<3, float> right = cross(f, wup).normalized();
 
     m_camPos.x += f.x * _forward + right.x * _right + wup.x * _up;
     m_camPos.y += f.y * _forward + right.y * _right + wup.y * _up;
@@ -90,22 +90,21 @@ void ScenePreview::moveLocal(float _forward, float _right, float _up)
 
 void ScenePreview::dolly(float _amount)
 {
-    ee::math::Vector3<float> f = forwardFrom(m_yaw, m_pitch);
+    ee::math::Vector<3, float> f = forwardFrom(m_yaw, m_pitch);
     m_camPos.x += f.x * _amount;
     m_camPos.y += f.y * _amount;
     m_camPos.z += f.z * _amount;
 }
 
-void ScenePreview::getViewMatrix(float _out[16]) const
+void ScenePreview::getViewMatrix(ee::math::Matrix<4, float> &_out) const
 {
-    for (int i = 0; i < 16; ++i)
-        _out[i] = m_view[i];
+
+    _out = m_view;
 }
 
-void ScenePreview::getProjMatrix(float _out[16]) const
+void ScenePreview::getProjMatrix(ee::math::Matrix<4, float> &_out) const
 {
-    for (int i = 0; i < 16; ++i)
-        _out[i] = m_proj[i];
+    _out = m_proj;
 }
 
 int ScenePreview::pick(const SceneInfo &_scene, float _ndcX, float _ndcY, float _aspect)
@@ -124,10 +123,10 @@ int ScenePreview::pickFrom(const SceneInfo &_scene, const ee::render::Camera &_c
                            float _ndcY, float _aspect)
 {
     // Repere de la camera : avant, droite, haut.
-    ee::math::Vector3<float> forward = forwardFrom(_cam.yaw, _cam.pitch);
-    ee::math::Vector3<float> wup{0.0f, 1.0f, 0.0f};
-    ee::math::Vector3<float> right = forward.Cross(wup).Normalize();
-    ee::math::Vector3<float> camUp = right.Cross(forward);
+    ee::math::Vector<3, float> forward = forwardFrom(_cam.yaw, _cam.pitch);
+    ee::math::Vector<3, float> wup{0.0f, 1.0f, 0.0f};
+    ee::math::Vector<3, float> right = cross(forward, wup).normalized();
+    ee::math::Vector<3, float> camUp = cross(right, forward);
 
     float t = std::tan(_cam.fovDeg * 3.14159265f / 180.0f * 0.5f);
 
@@ -135,7 +134,7 @@ int ScenePreview::pickFrom(const SceneInfo &_scene, const ee::render::Camera &_c
     // systeme de picking (indep. du backend de rendu).
     ee::systems::Ray ray;
     ray.origin = {_cam.pos.x, _cam.pos.y, _cam.pos.z};
-    ray.dir = (forward + right * (_ndcX * _aspect * t) + camUp * (_ndcY * t)).Normalize();
+    ray.dir = (forward + right * (_ndcX * _aspect * t) + camUp * (_ndcY * t)).normalized();
 
     return ee::systems::pickScene(_scene, ray);
 }

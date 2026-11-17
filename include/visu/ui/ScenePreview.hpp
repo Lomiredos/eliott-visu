@@ -2,7 +2,7 @@
 
 #include "visu/core/SceneInfo.hpp"
 #include "visu/render/GLRenderer.hpp"
-#include "math/Vector3.hpp"
+#include "math/Vector.hpp"
 
 // Host editeur de la preview 3D.
 //
@@ -32,8 +32,8 @@ public:
                         float _ndcY, float _aspect);
 
     // Matrices du dernier render (pour ImGuizmo). column-major, 16 floats.
-    void getViewMatrix(float _out[16]) const;
-    void getProjMatrix(float _out[16]) const;
+    void getViewMatrix(ee::math::Matrix<4, float> &_out) const;
+    void getProjMatrix(ee::math::Matrix<4, float> &_out) const;
 
     // --- Controle camera libre (mode navigation) ---
     void addYawPitch(float _dYaw, float _dPitch);            // rotation souris
@@ -47,11 +47,11 @@ private:
 
     // Matrices du dernier render() (vue editeur), gardees a part : un
     // renderCameraView ensuite ne doit pas fausser le gizmo.
-    float m_view[16] = {0};
-    float m_proj[16] = {0};
+    ee::math::Matrix<4, float> m_view{};
+    ee::math::Matrix<4, float> m_proj{};
 
     // Camera : position + orientation (yaw autour de Y, pitch haut/bas).
-    ee::math::Vector3<float> m_camPos = {6.0f, 5.0f, 6.0f};
+    ee::math::Vector<3, float> m_camPos = {6.0f, 5.0f, 6.0f};
     float m_yaw = 0.0f;
     float m_pitch = 0.0f;
     bool m_camInit = false;
